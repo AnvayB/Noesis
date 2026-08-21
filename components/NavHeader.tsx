@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { BrainLogo } from "@/components/BrainLogo";
+import { MobileNavMenu } from "@/components/MobileNavMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const NAV_ITEMS = [
@@ -23,7 +24,7 @@ export function NavHeader({
   right?: ReactNode;
 }) {
   return (
-    <header className="flex items-center justify-between border-b border-black/[.06] px-8 py-5 dark:border-white/[.08]">
+    <header className="relative flex items-center justify-between border-b border-black/[.06] px-4 py-5 sm:px-8 dark:border-white/[.08]">
       <nav className="flex items-center gap-6">
         <Link
           href="/"
@@ -48,9 +49,10 @@ export function NavHeader({
           ))}
         </div>
       </nav>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         <ThemeToggle />
         {right}
+        <MobileNavMenu items={NAV_ITEMS} active={active} />
       </div>
     </header>
   );

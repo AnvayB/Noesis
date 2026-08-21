@@ -129,7 +129,7 @@ export default async function EditSessionPage({
             </div>
           </fieldset>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 Resource type

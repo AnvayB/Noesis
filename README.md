@@ -5,6 +5,27 @@ evolving knowledge landscape — not streaks, XP, or a progress bar. See
 `prompt.md` for the full product spec and `.claude/plans/` history for the
 architecture plan this was built from.
 
+## Pages
+
+- **Home** (`/`) — Mindscape preview, backlog, recent sessions, curiosity inbox.
+- **Learn** (`/sessions`) — add learning material (title, AI-suggested topic,
+  resource type, environment/activity mode), start/complete sessions, and
+  explain back what you learned for LLM-graded feedback.
+- **Practice** (`/practice`) — casual recall quizzes and "explain it to a
+  nontechnical person" speaking prompts, generated from concepts you've
+  already logged.
+- **Mindscape** (`/mindscape`) — the force-directed concept graph: nodes are
+  concepts you've learned about, edges are LLM-inferred relationships between
+  them, both built up incrementally from your explain-backs.
+- **Learn Noesis** (`/learn-noesis`) — a self-study curriculum on how this app
+  is actually built, graded against the real implementation (see
+  `lib/curriculum/`).
+- **Arteris 101** (`/arteris-101`) — a second curriculum track teaching
+  semiconductor/SoC/interconnect fundamentals and the Arteris product lineup;
+  a second, generalized use of the same curriculum engine as Learn Noesis (see
+  the "Multi-Track Curriculum" module inside Learn Noesis itself for how the
+  two share one grading system).
+
 ## Setup
 
 ```bash
@@ -55,6 +76,11 @@ backup/replication instead.
   adapter is the V1 default; add a new file in `providers/` and a case in
   `index.ts` to support Claude or a local model later — application code
   should only ever import `{ ai }` from `lib/ai`, never a provider SDK.
+- `lib/curriculum/` — content-as-code curriculum modules (`modules/*.ts`),
+  each tagged with a `track` (`"noesis"` or `"arteris"`). Adding a module is a
+  new file plus one entry in `index.ts`, no migration required; adding a
+  whole new track is a new `CURRICULUM_TRACKS` entry, a nav item, and two thin
+  page wrappers (see `app/arteris-101/` for the pattern).
 
 ## Scripts
 
