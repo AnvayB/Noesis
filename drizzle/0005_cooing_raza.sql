@@ -1,0 +1,1 @@
+ALTER TABLE `learning_sessions` ADD `status` text DEFAULT 'started' NOT NULL;

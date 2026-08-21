@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
+/* Dark mode is toggled by a `.dark` class on <html> (see ThemeToggle +
+   the inline script in layout.tsx that sets it before first paint), not
+   only by OS preference — this makes `dark:` utilities respond to the
+   explicit toggle instead of just prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
+  --background: #f2ebe3;
   --foreground: #171717;
 }
 
@@ -12,11 +18,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {

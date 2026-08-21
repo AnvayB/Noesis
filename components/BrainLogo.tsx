@@ -1,0 +1,19 @@
+export function BrainLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M9 4.5a3 3 0 0 0-3 3v.3A3.3 3.3 0 0 0 4 10.8a3.2 3.2 0 0 0-.5 3.5A3.1 3.1 0 0 0 5 18.6a2.8 2.8 0 0 0 2.7 1.9c.3.9 1.2 1.5 2.1 1.5a2.2 2.2 0 0 0 2.2-2.2v-12A3 3 0 0 0 9 4.5Z" />
+      <path d="M15 4.5a3 3 0 0 1 3 3v.3a3.3 3.3 0 0 1 2 3 3.2 3.2 0 0 1 .5 3.5 3.1 3.1 0 0 1-1.5 4.3 2.8 2.8 0 0 1-2.7 1.9c-.3.9-1.2 1.5-2.1 1.5a2.2 2.2 0 0 1-2.2-2.2v-12a3 3 0 0 1 3-3Z" />
+      <path d="M9 7.8c.9 0 1.7.4 2.2 1M6.3 10.7c.7 0 1.4.3 1.9.8M4.6 14.3c.6.4 1.4.6 2.1.5M8.6 17.7c.5-.4 1.2-.6 1.9-.5" />
+      <path d="M15 7.8c-.9 0-1.7.4-2.2 1M17.7 10.7c-.7 0-1.4.3-1.9.8M19.4 14.3c-.6.4-1.4.6-2.1.5M15.4 17.7c-.5-.4-1.2-.6-1.9-.5" />
+    </svg>
+  );
+}
