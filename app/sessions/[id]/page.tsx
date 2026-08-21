@@ -192,7 +192,7 @@ export default async function SessionDetailPage({
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm text-zinc-600 dark:text-zinc-300">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm text-zinc-600 dark:text-zinc-300">
                   <div>
                     <span className="text-xs text-zinc-400 dark:text-zinc-600">Depth</span>
                     <p>{result.analysis.depth}</p>
