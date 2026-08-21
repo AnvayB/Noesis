@@ -44,6 +44,7 @@ export const ai: AIProvider = {
   analyzeExplainBack: (input) => getProvider().analyzeExplainBack(input),
   generateRecallQuestion: (input) => getProvider().generateRecallQuestion(input),
   generateSpeakingPrompt: (input) => getProvider().generateSpeakingPrompt(input),
+  suggestTopic: (input) => getProvider().suggestTopic(input),
   generateProjectSuggestion: (input) =>
     getProvider().generateProjectSuggestion(input),
   analyzeArchitectureResponse: (input) =>
@@ -58,6 +59,8 @@ export type {
   RecallQuestion,
   SpeakingPromptContext,
   SpeakingPromptSuggestion,
+  TopicSuggestionContext,
+  TopicSuggestion,
   ProjectContext,
   ProjectSuggestion,
   ArchitectureResponseLevel,

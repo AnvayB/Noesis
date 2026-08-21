@@ -13,6 +13,8 @@ import type {
   RecallQuestion,
   SpeakingPromptContext,
   SpeakingPromptSuggestion,
+  TopicSuggestion,
+  TopicSuggestionContext,
 } from "../types";
 import {
   architectureResponseAnalysisSchema,
@@ -20,6 +22,7 @@ import {
   projectSuggestionSchema,
   recallQuestionSchema,
   speakingPromptSchema,
+  topicSuggestionSchema,
 } from "../schemas";
 
 const ARCHITECTURE_LEVEL_RUBRIC: Record<ArchitectureResponseLevel, string> = {
@@ -175,6 +178,37 @@ export class OpenAIProvider implements AIProvider {
     return parsed;
   }
 
+  async suggestTopic(input: TopicSuggestionContext): Promise<TopicSuggestion> {
+    const completion = await this.client.chat.completions.parse({
+      model: DEFAULT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You infer a short topic name for a piece of learning material from its title, " +
+            "so similar sessions collapse under the same category. If existing_topics " +
+            "contains one that the title is clearly about, return that exact string " +
+            "(same spelling/casing) — do not invent a near-duplicate. Otherwise propose a " +
+            "new concise topic (1-3 words, Title Case, e.g. 'Attention', 'Mixture of " +
+            "Experts') general enough that future related sessions could reuse it too, " +
+            "not a restatement of the whole title.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            title: input.title,
+            existingTopics: input.existingTopics,
+          }),
+        },
+      ],
+      response_format: zodResponseFormat(topicSuggestionSchema, "topic_suggestion"),
+    });
+
+    const parsed = completion.choices[0]?.message.parsed;
+    if (!parsed) throw new Error("OpenAI returned no parsed topic suggestion");
+    return parsed;
+  }
+
   async analyzeArchitectureResponse(
     input: ArchitectureResponseInput,
   ): Promise<ArchitectureResponseAnalysis> {
@@ -184,13 +218,11 @@ export class OpenAIProvider implements AIProvider {
         {
           role: "system",
           content:
-            "You evaluate a learner's response about the architecture of Noesis, the very " +
-            "app they're building — you're grading their understanding of a real " +
-            "implementation, not opinion. Be specific and evidence-based against the " +
-            "ground truth given. Never produce a single numeric score — report structured " +
-            "qualitative findings only. Every misconception must include a correction " +
-            "grounded in the ground truth, e.g. 'you're mixing up what the LLM controls " +
-            "versus what deterministic application code controls.'\n\n" +
+            `You evaluate a learner's response about "${input.moduleTitle}" (${input.lessonSummary}) ` +
+            "— you're grading their understanding against the ground truth given, not " +
+            "opinion. Be specific and evidence-based. Never produce a single numeric " +
+            "score — report structured qualitative findings only. Every misconception " +
+            "must include a correction grounded in the ground truth given.\n\n" +
             ARCHITECTURE_LEVEL_RUBRIC[input.level],
         },
         {

@@ -5,6 +5,7 @@ import { updateSessionAction } from "@/lib/actions/sessions";
 import {
   learningSessionStatusValues,
   resourceTypeValues,
+  resourceTypeLabels,
 } from "@/lib/db/schema";
 import { getSessionById } from "@/lib/queries";
 
@@ -141,7 +142,7 @@ export default async function EditSessionPage({
                 <option value="">None</option>
                 {resourceTypeValues.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {resourceTypeLabels[type]}
                   </option>
                 ))}
               </select>

@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const practiceSpeaking: CurriculumModule = {
   slug: "practice-speaking",
+  track: "noesis",
   phase: "Phase 4 — Practice",
   title: "Practice & Speaking",
   summary:

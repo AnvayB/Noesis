@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { NavHeader } from "@/components/NavHeader";
+import { SessionTitleTopicFields } from "@/components/SessionTitleTopicFields";
 import { createSessionAction } from "@/lib/actions/sessions";
-import { resourceTypeValues } from "@/lib/db/schema";
+import { resourceTypeValues, resourceTypeLabels } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -36,29 +37,7 @@ export default async function NewSessionPage({
             />
           )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">Title</span>
-            <input
-              name="title"
-              required
-              placeholder="e.g. Implementing attention from scratch"
-              className="rounded-lg border border-black/[.08] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-white/[.1] dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">Topic</span>
-            <input
-              name="topic"
-              required
-              defaultValue={params.topic ?? ""}
-              placeholder="e.g. Attention"
-              className="rounded-lg border border-black/[.08] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-white/[.1] dark:bg-zinc-950 dark:text-zinc-100"
-            />
-            <span className="text-xs text-zinc-400 dark:text-zinc-600">
-              Links this session to a concept in your knowledge landscape.
-            </span>
-          </label>
+          <SessionTitleTopicFields defaultTopic={params.topic ?? ""} />
 
           <fieldset className="flex flex-col gap-1.5">
             <legend className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -115,7 +94,7 @@ export default async function NewSessionPage({
                 <option value="">None</option>
                 {resourceTypeValues.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {resourceTypeLabels[type]}
                   </option>
                 ))}
               </select>
@@ -165,18 +144,18 @@ export default async function NewSessionPage({
             <button
               type="submit"
               name="status"
-              value="started"
+              value="pending"
               className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
             >
-              Start now
+              Add to backlog
             </button>
             <button
               type="submit"
               name="status"
-              value="pending"
+              value="started"
               className="rounded-full bg-black/[.06] px-5 py-2 text-sm font-medium text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
             >
-              Add to backlog
+              Start now
             </button>
             <Link
               href="/"

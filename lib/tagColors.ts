@@ -35,6 +35,7 @@ export const RESOURCE_TYPE_STYLE: Record<ResourceType, string> = {
   youtube: "bg-red-500/10 text-red-700 dark:text-red-400",
   article: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   podcast: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+  webinar: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
   notebooklm: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
   paper: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
   doc: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",

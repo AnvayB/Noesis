@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const mindscapeVisualization: CurriculumModule = {
   slug: "mindscape-visualization",
+  track: "noesis",
   phase: "Phase 3 — Knowledge & Memory",
   title: "Mindscape Visualization",
   summary:

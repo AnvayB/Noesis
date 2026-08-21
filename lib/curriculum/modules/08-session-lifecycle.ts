@@ -2,11 +2,13 @@ import type { CurriculumModule } from "../types";
 
 export const sessionLifecycle: CurriculumModule = {
   slug: "session-lifecycle",
+  track: "noesis",
   phase: "Phase 5 — Learning Workflow",
   title: "Session Lifecycle: Pending, Started, Completed",
   summary:
     "How a learning session went from an implicit 'always already in progress' row to an explicit three-state workflow with its own transitions — and what had to change to support it.",
   lesson: {
+    diagramId: "session-lifecycle-states",
     overview:
       "Originally, creating a learningSessions row meant you were already learning it — there was no way to save a reference to something you intended to consume later without it immediately counting as 'in progress'. This module covers the migration that added a status column (pending/started/completed) and the three narrow, single-purpose actions that move a session between those states.",
     sections: [

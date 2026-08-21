@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const databaseLayerTursoMigration: CurriculumModule = {
   slug: "database-layer-turso-migration",
+  track: "noesis",
   phase: "Phase 7 — Infrastructure & Deployment",
   title: "Database Layer & the Turso/Vercel Migration",
   summary:

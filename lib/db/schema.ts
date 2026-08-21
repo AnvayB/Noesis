@@ -7,6 +7,7 @@ export const resourceTypeValues = [
   "youtube",
   "article",
   "podcast",
+  "webinar",
   "notebooklm",
   "paper",
   "doc",
@@ -14,6 +15,18 @@ export const resourceTypeValues = [
   "other",
 ] as const;
 export type ResourceType = (typeof resourceTypeValues)[number];
+
+export const resourceTypeLabels: Record<ResourceType, string> = {
+  youtube: "YouTube",
+  article: "Article",
+  podcast: "Podcast",
+  webinar: "Webinar",
+  notebooklm: "NotebookLM",
+  paper: "Paper",
+  doc: "Doc",
+  book: "Book",
+  other: "Other",
+};
 
 export const resources = sqliteTable("resources", {
   id: text("id")
