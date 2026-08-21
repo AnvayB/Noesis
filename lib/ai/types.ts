@@ -66,6 +66,19 @@ export interface SpeakingPromptSuggestion {
   prompt: string;
 }
 
+export interface TopicSuggestionContext {
+  title: string;
+  /** Names of concepts already in the knowledge landscape, most recently
+   * encountered first — reuse one of these verbatim when it's a real match,
+   * so similar sessions collapse onto the same Concept instead of spawning
+   * near-duplicates. */
+  existingTopics: string[];
+}
+
+export interface TopicSuggestion {
+  topic: string;
+}
+
 // Learn Noesis — grading for the four response-based curriculum levels
 // (Understand has no response, so it never reaches this call).
 export type ArchitectureResponseLevel = "explain" | "trace" | "modify" | "design";
@@ -100,6 +113,10 @@ export interface AIProvider {
   generateSpeakingPrompt(
     input: SpeakingPromptContext,
   ): Promise<SpeakingPromptSuggestion>;
+  // Add learning material form — infers a topic from the title, reusing an
+  // existing concept name when the title matches one already in the
+  // knowledge landscape.
+  suggestTopic(input: TopicSuggestionContext): Promise<TopicSuggestion>;
   // Architect For — not called by any Phase 1-4 code path yet, but part of
   // the interface so adding the Project feature later doesn't touch adapters.
   generateProjectSuggestion(input: ProjectContext): Promise<ProjectSuggestion>;

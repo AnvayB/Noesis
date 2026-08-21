@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const recallRetention: CurriculumModule = {
   slug: "recall-retention",
+  track: "noesis",
   phase: "Phase 3 — Knowledge & Memory",
   title: "Recall & Retention",
   summary:

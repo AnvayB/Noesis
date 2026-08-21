@@ -1,4 +1,4 @@
-import type { CurriculumModule } from "./types";
+import type { CurriculumModule, CurriculumTrack } from "./types";
 import { coreLoopDataModel } from "./modules/01-core-loop-data-model";
 import { explainBackAiAbstraction } from "./modules/02-explain-back-ai-abstraction";
 import { knowledgeModelConceptGraph } from "./modules/03-knowledge-model-concept-graph";
@@ -9,6 +9,16 @@ import { howLlmsWork } from "./modules/07-how-llms-work";
 import { sessionLifecycle } from "./modules/08-session-lifecycle";
 import { learnNoesisSelfStudy } from "./modules/09-learn-noesis-self-study";
 import { databaseLayerTursoMigration } from "./modules/10-database-layer-turso-migration";
+import { semiconductorsChipBasics } from "./modules/11-semiconductors-chip-basics";
+import { chipComponentsDesignFlow } from "./modules/12-chip-components-design-flow";
+import { socFundamentals } from "./modules/13-soc-fundamentals";
+import { interconnectNocFundamentals } from "./modules/14-interconnect-noc-fundamentals";
+import { semiconductorIpLicensing } from "./modules/15-semiconductor-ip-licensing";
+import { arterisNcore } from "./modules/16-arteris-ncore";
+import { arterisNoncoherentInterconnect } from "./modules/17-arteris-noncoherent-interconnect";
+import { arterisMagillem } from "./modules/18-arteris-magillem";
+import { arterisCacheSecurity } from "./modules/19-arteris-cache-security";
+import { multiTrackCurriculumSystem } from "./modules/20-multi-track-curriculum-system";
 
 // Array order = canonical progression order. Adding a future module (e.g.
 // once embeddings/RAG/local inference get built) is a new file here plus
@@ -29,6 +39,16 @@ export const CURRICULUM_MODULES: CurriculumModule[] = [
   sessionLifecycle,
   learnNoesisSelfStudy,
   databaseLayerTursoMigration,
+  multiTrackCurriculumSystem,
+  semiconductorsChipBasics,
+  chipComponentsDesignFlow,
+  socFundamentals,
+  interconnectNocFundamentals,
+  semiconductorIpLicensing,
+  arterisNcore,
+  arterisNoncoherentInterconnect,
+  arterisMagillem,
+  arterisCacheSecurity,
 ];
 
 export function getCurriculumModule(slug: string): CurriculumModule | undefined {
@@ -40,9 +60,10 @@ export interface CurriculumPhase {
   modules: CurriculumModule[];
 }
 
-export function listCurriculumPhases(): CurriculumPhase[] {
+export function listCurriculumPhases(track: CurriculumTrack): CurriculumPhase[] {
   const phases: CurriculumPhase[] = [];
   for (const curriculumModule of CURRICULUM_MODULES) {
+    if (curriculumModule.track !== track) continue;
     const existing = phases.find((p) => p.phase === curriculumModule.phase);
     if (existing) {
       existing.modules.push(curriculumModule);
@@ -53,4 +74,12 @@ export function listCurriculumPhases(): CurriculumPhase[] {
   return phases;
 }
 
-export type { CurriculumModule, CurriculumLevelContent, CurriculumLessonSection } from "./types";
+export {
+  CURRICULUM_TRACKS,
+  type CurriculumModule,
+  type CurriculumLevelContent,
+  type CurriculumLessonSection,
+  type CurriculumTrack,
+  type CurriculumTrackInfo,
+  type GradeableCurriculumLevel,
+} from "./types";

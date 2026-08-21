@@ -2,11 +2,13 @@ import type { CurriculumModule } from "../types";
 
 export const coreLoopDataModel: CurriculumModule = {
   slug: "core-loop-data-model",
+  track: "noesis",
   phase: "Phase 1 — Foundations",
   title: "Core Loop & Data Model",
   summary:
     "How a learning session becomes rows in SQLite, and why the app is built around a Consume → Recall → Explain → Revisit loop instead of gamified scoring.",
   lesson: {
+    diagramId: "core-loop-data-model",
     overview:
       "Every screen in Noesis ultimately reads or writes a small set of Drizzle-managed SQLite tables, almost always through a Next.js server action rather than a REST API. Before touching any of that code, it helps to understand the loop the data model exists to support: Consume (read/watch/listen to something) → Recall (get occasionally, casually quizzed on it later) → Explain (put it in your own words) → Feedback (an LLM tells you what you got right and wrong) → Revisit → Retain. Everything else in the app — the tables, the AI calls, the visualization — is in service of making that loop cheap enough to actually do.",
     sections: [

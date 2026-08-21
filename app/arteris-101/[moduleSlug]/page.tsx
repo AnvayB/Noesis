@@ -2,7 +2,7 @@ import { CurriculumModuleView } from "@/components/CurriculumModuleView";
 
 export const dynamic = "force-dynamic";
 
-export default async function LearnNoesisModulePage({
+export default async function Arteris101ModulePage({
   params,
   searchParams,
 }: {
@@ -11,5 +11,5 @@ export default async function LearnNoesisModulePage({
 }) {
   const { moduleSlug } = await params;
   const { level } = await searchParams;
-  return <CurriculumModuleView track="noesis" moduleSlug={moduleSlug} levelParam={level} />;
+  return <CurriculumModuleView track="arteris" moduleSlug={moduleSlug} levelParam={level} />;
 }

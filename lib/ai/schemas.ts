@@ -40,6 +40,10 @@ export const speakingPromptSchema = z.object({
   prompt: z.string(),
 });
 
+export const topicSuggestionSchema = z.object({
+  topic: z.string(),
+});
+
 export const architectureResponseAnalysisSchema = z.object({
   verdict: z.enum(["solid", "partial", "off_track"]),
   whatYouGotRight: z.array(z.string()),

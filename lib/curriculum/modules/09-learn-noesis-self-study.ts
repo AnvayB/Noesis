@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const learnNoesisSelfStudy: CurriculumModule = {
   slug: "learn-noesis-self-study",
+  track: "noesis",
   phase: "Phase 6 — Self-Study System",
   title: "Learn Noesis Itself: Curriculum, Grading & Self-Documentation",
   summary:

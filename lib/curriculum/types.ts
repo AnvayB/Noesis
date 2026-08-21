@@ -18,8 +18,27 @@ export interface CurriculumLessonSection {
   body: string;
 }
 
+/** Which curriculum track a module belongs to — each track gets its own nav
+ * item, index page, and URL namespace (see CURRICULUM_TRACKS below), but
+ * shares all the same grading/attempt machinery. */
+export type CurriculumTrack = "noesis" | "arteris";
+
+export interface CurriculumTrackInfo {
+  label: string;
+  /** URL prefix for this track's index + module pages, e.g. "/learn-noesis". */
+  basePath: string;
+}
+
+export const CURRICULUM_TRACKS = {
+  noesis: { label: "Learn Noesis", basePath: "/learn-noesis" },
+  arteris: { label: "Arteris 101", basePath: "/arteris-101" },
+} as const satisfies Record<CurriculumTrack, CurriculumTrackInfo>;
+
+export type GradeableCurriculumLevel = "explain" | "trace" | "modify" | "design";
+
 export interface CurriculumModule {
   slug: string;
+  track: CurriculumTrack;
   /** Display grouping label, e.g. "Phase 1 — Foundations". */
   phase: string;
   title: string;
@@ -33,14 +52,24 @@ export interface CurriculumModule {
      * tour of Noesis's specific files. That's what makes this a lesson,
      * not documentation. */
     sections: CurriculumLessonSection[];
-    /** Real repo paths this module covers — shown as reference labels for
-     * the learner to go read, not fetched/rendered in-app. */
+    /** Real repo paths this module covers, OR — for non-Noesis tracks —
+     * external reference URLs. Shown as reference labels for the learner to
+     * go read, not fetched/rendered in-app. */
     sourceFiles?: string[];
+    /** Key into CURRICULUM_DIAGRAMS (components/curriculum/diagrams) — an
+     * original inline-SVG diagram rendered under the overview. Optional:
+     * only the most diagram-worthy modules get one, not every module. */
+    diagramId?: string;
+    /** Real, verified external videos (not fabricated) that support this
+     * module's general-knowledge content. Left empty for modules with no
+     * genuine external match — e.g. Noesis's own architecture, or an
+     * individual Arteris product with no independent public video. */
+    videos?: { title: string; url: string }[];
   };
-  levels: {
-    explain: CurriculumLevelContent;
-    trace: CurriculumLevelContent;
-    modify: CurriculumLevelContent;
-    design: CurriculumLevelContent;
-  };
+  /** Which gradeable levels this module offers, beyond the always-available
+   * "understand". Noesis modules document a real implementation, so they
+   * supply all four. Tracks with no underlying implementation to trace or
+   * modify (e.g. Arteris 101, which teaches external product knowledge)
+   * should only supply "explain" — see feedback_curriculum_track_levels. */
+  levels: Partial<Record<GradeableCurriculumLevel, CurriculumLevelContent>>;
 }

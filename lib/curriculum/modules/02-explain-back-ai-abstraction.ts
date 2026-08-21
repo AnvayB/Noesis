@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const explainBackAiAbstraction: CurriculumModule = {
   slug: "explain-back-ai-abstraction",
+  track: "noesis",
   phase: "Phase 2 — Talking to an LLM",
   title: "Explain-Back & the AI Provider Abstraction",
   summary:

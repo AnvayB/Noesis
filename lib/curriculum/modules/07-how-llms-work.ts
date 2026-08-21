@@ -2,6 +2,7 @@ import type { CurriculumModule } from "../types";
 
 export const howLlmsWork: CurriculumModule = {
   slug: "how-llms-work",
+  track: "noesis",
   phase: "Phase 2 — Talking to an LLM",
   title: "How LLMs Actually Work",
   summary:
@@ -31,6 +32,12 @@ export const howLlmsWork: CurriculumModule = {
       "lib/ai/schemas.ts",
       "lib/ai/types.ts",
       "lib/queries.ts",
+    ],
+    videos: [
+      {
+        title: "Large Language Models, Explained Briefly — 3Blue1Brown",
+        url: "https://www.youtube.com/watch?v=WMcwoIyK4DA",
+      },
     ],
   },
   levels: {

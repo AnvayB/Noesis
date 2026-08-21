@@ -2,11 +2,13 @@ import type { CurriculumModule } from "../types";
 
 export const knowledgeModelConceptGraph: CurriculumModule = {
   slug: "knowledge-model-concept-graph",
+  track: "noesis",
   phase: "Phase 3 — Knowledge & Memory",
   title: "Knowledge Model & Concept Graph",
   summary:
     "How individual explain-backs accumulate into a graph of concepts and weighted relationships, and why understanding is derived rather than stored.",
   lesson: {
+    diagramId: "concept-graph-excerpt",
     overview:
       "Every other feature so far (sessions, explain-back) produces one-off records. This module is about how those records accumulate into something bigger: a graph where nodes are Concepts and edges are ConceptRelations, built up incrementally from repeated LLM analyses rather than authored by hand.",
     sections: [

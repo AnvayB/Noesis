@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/practice", label: "Practice" },
   { href: "/mindscape", label: "Mindscape" },
   { href: "/learn-noesis", label: "Learn Noesis" },
+  { href: "/arteris-101", label: "Arteris 101" },
 ] as const;
 
 // No "Projects" item, since that feature isn't built (Architect For, not
