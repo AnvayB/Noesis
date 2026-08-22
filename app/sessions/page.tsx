@@ -297,9 +297,22 @@ export default async function SessionsPage({
                   <div className="flex shrink-0 items-center gap-3">
                     <Link
                       href={`/sessions/${session.id}/edit`}
-                      className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
+                      aria-label={`Edit ${session.title}`}
+                      title="Edit"
+                      className="flex h-6 w-6 items-center justify-center text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
                     >
-                      Edit
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
                     </Link>
                     <DeleteSessionButton
                       sessionId={session.id}
