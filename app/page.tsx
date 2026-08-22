@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteSessionButton } from "@/components/DeleteSessionButton";
 import { Mindscape } from "@/components/Mindscape";
 import { NavHeader } from "@/components/NavHeader";
 import {
@@ -26,6 +27,7 @@ function formatDate(iso: string) {
   return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+    timeZone: "America/Los_Angeles",
   });
 }
 
@@ -123,15 +125,21 @@ export default async function Home() {
                       </span>
                     )}
                   </Link>
-                  <form action={startSessionAction}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <button
-                      type="submit"
-                      className="whitespace-nowrap rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    >
-                      Start
-                    </button>
-                  </form>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <DeleteSessionButton
+                      sessionId={session.id}
+                      sessionTitle={session.title}
+                    />
+                    <form action={startSessionAction}>
+                      <input type="hidden" name="sessionId" value={session.id} />
+                      <button
+                        type="submit"
+                        className="whitespace-nowrap rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+                      >
+                        Start
+                      </button>
+                    </form>
+                  </div>
                 </li>
               ))}
             </ul>

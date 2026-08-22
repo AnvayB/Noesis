@@ -1,10 +1,14 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import {
+  conceptUnderstandings,
   curiosityItems,
+  explainBackConcepts,
+  explainBacks,
   learningSessionStatusValues,
   learningSessions,
   resourceTypeValues,
@@ -260,4 +264,46 @@ export async function completeSessionAction(formData: FormData) {
     .run();
 
   redirect(`/sessions/${sessionId}`);
+}
+
+// FK "cascade"/"set null" in the schema are declarative only — libSQL, like
+// SQLite, defaults foreign key enforcement off per connection, and nothing
+// in lib/db/index.ts turns it on — so a plain delete on learningSessions
+// would leave orphaned explain_backs/session_concepts rows behind. Delete
+// the dependent rows explicitly, in dependency order, instead.
+export async function deleteSessionAction(formData: FormData) {
+  const sessionId = field(formData, "sessionId");
+  if (!sessionId) throw new Error("Session id is required.");
+
+  const db = await getDb();
+
+  const backs = await db
+    .select({ id: explainBacks.id })
+    .from(explainBacks)
+    .where(eq(explainBacks.sessionId, sessionId))
+    .all();
+  const explainBackIds = backs.map((b) => b.id);
+
+  if (explainBackIds.length > 0) {
+    await db
+      .delete(conceptUnderstandings)
+      .where(inArray(conceptUnderstandings.explainBackId, explainBackIds))
+      .run();
+    await db
+      .delete(explainBackConcepts)
+      .where(inArray(explainBackConcepts.explainBackId, explainBackIds))
+      .run();
+  }
+
+  await db.delete(explainBacks).where(eq(explainBacks.sessionId, sessionId)).run();
+  await db.delete(sessionConcepts).where(eq(sessionConcepts.sessionId, sessionId)).run();
+  await db
+    .update(curiosityItems)
+    .set({ promotedToSessionId: null })
+    .where(eq(curiosityItems.promotedToSessionId, sessionId))
+    .run();
+  await db.delete(learningSessions).where(eq(learningSessions.id, sessionId)).run();
+
+  revalidatePath("/");
+  revalidatePath("/sessions");
 }

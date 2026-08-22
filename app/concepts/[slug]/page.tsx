@@ -24,6 +24,7 @@ function formatDate(iso: string) {
   return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+    timeZone: "America/Los_Angeles",
   });
 }
 

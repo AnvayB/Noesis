@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteSessionButton } from "@/components/DeleteSessionButton";
 import { FilterSelect } from "@/components/FilterSelect";
 import { NavHeader } from "@/components/NavHeader";
 import { startSessionAction } from "@/lib/actions/sessions";
@@ -24,6 +25,7 @@ function formatDate(iso: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Los_Angeles",
   });
 }
 
@@ -299,6 +301,10 @@ export default async function SessionsPage({
                     >
                       Edit
                     </Link>
+                    <DeleteSessionButton
+                      sessionId={session.id}
+                      sessionTitle={session.title}
+                    />
                     <span className="whitespace-nowrap text-xs text-zinc-400 dark:text-zinc-600">
                       {formatDate(session.startedAt)}
                     </span>
