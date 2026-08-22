@@ -41,6 +41,7 @@ export const RESOURCE_TYPE_STYLE: Record<ResourceType, string> = {
   paper: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
   doc: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
   book: "bg-lime-600/10 text-lime-700 dark:text-lime-400",
+  website: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   other: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
 };
 

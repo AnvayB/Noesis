@@ -13,6 +13,7 @@ export const resourceTypeValues = [
   "paper",
   "doc",
   "book",
+  "website",
   "other",
 ] as const;
 export type ResourceType = (typeof resourceTypeValues)[number];
@@ -27,6 +28,7 @@ export const resourceTypeLabels: Record<ResourceType, string> = {
   paper: "Paper",
   doc: "Doc",
   book: "Book",
+  website: "Website",
   other: "Other",
 };
 
