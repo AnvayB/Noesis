@@ -37,6 +37,7 @@ export const RESOURCE_TYPE_STYLE: Record<ResourceType, string> = {
   podcast: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
   webinar: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
   notebooklm: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
+  chatgpt: "bg-green-500/10 text-green-700 dark:text-green-400",
   paper: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
   doc: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
   book: "bg-lime-600/10 text-lime-700 dark:text-lime-400",
