@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { NavHeader } from "@/components/NavHeader";
+import { NewSessionSubmitButtons } from "@/components/NewSessionSubmitButtons";
 import { SessionTitleTopicFields } from "@/components/SessionTitleTopicFields";
 import { createSessionAction } from "@/lib/actions/sessions";
 import { resourceTypeValues, resourceTypeLabels } from "@/lib/db/schema";
@@ -141,22 +142,7 @@ export default async function NewSessionPage({
           </label>
 
           <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              name="status"
-              value="pending"
-              className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              Add to backlog
-            </button>
-            <button
-              type="submit"
-              name="status"
-              value="started"
-              className="rounded-full bg-black/[.06] px-5 py-2 text-sm font-medium text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
-            >
-              Start now
-            </button>
+            <NewSessionSubmitButtons />
             <Link
               href="/"
               className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"

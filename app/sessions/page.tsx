@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FilterSelect } from "@/components/FilterSelect";
 import { NavHeader } from "@/components/NavHeader";
 import { startSessionAction } from "@/lib/actions/sessions";
 import type {
@@ -29,24 +30,47 @@ function formatDate(iso: string) {
 function FilterLink({
   href,
   active,
+  count,
   children,
 }: {
   href: string;
   active: boolean;
+  count: number;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
-      className={
-        active
-          ? "rounded-full bg-zinc-900 px-3 py-1 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "rounded-full bg-black/[.04] px-3 py-1 text-xs text-zinc-600 dark:bg-white/[.08] dark:text-zinc-300"
-      }
+      className="inline-flex items-stretch overflow-hidden rounded-full text-xs"
     >
-      {children}
+      <span
+        className={
+          active
+            ? "px-3 py-1 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+            : "px-3 py-1 bg-black/[.04] text-zinc-600 dark:bg-white/[.08] dark:text-zinc-300"
+        }
+      >
+        {children}
+      </span>
+      <span
+        className={
+          active
+            ? "px-1.5 py-1 bg-zinc-700 text-white dark:bg-zinc-300 dark:text-zinc-900"
+            : "px-1.5 py-1 bg-black/[.08] text-zinc-500 dark:bg-white/[.14] dark:text-zinc-400"
+        }
+      >
+        {count}
+      </span>
     </Link>
   );
+}
+
+function tally<T extends string>(rows: T[]): Record<T, number> {
+  const counts = {} as Record<T, number>;
+  for (const value of rows) {
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export default async function SessionsPage({
@@ -74,7 +98,17 @@ export default async function SessionsPage({
       ? (params.status as LearningSessionStatus)
       : undefined;
 
-  const sessions = await listAllSessions({ environmentMode, activityMode, status });
+  const [sessions, statusScoped, environmentScoped, activityScoped] =
+    await Promise.all([
+      listAllSessions({ environmentMode, activityMode, status }),
+      listAllSessions({ environmentMode, activityMode }),
+      listAllSessions({ status, activityMode }),
+      listAllSessions({ status, environmentMode }),
+    ]);
+
+  const statusCounts = tally(statusScoped.map((s) => s.status));
+  const environmentCounts = tally(environmentScoped.map((s) => s.environmentMode));
+  const activityCounts = tally(activityScoped.map((s) => s.activityMode));
 
   const query = (overrides: {
     environment?: string;
@@ -106,84 +140,131 @@ export default async function SessionsPage({
         }
       />
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-8 py-12">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-12 sm:px-8">
         <h1 className="text-lg font-medium text-zinc-800 dark:text-zinc-100">
           Session history
         </h1>
 
         <div className="flex flex-col gap-3 rounded-xl border border-black/[.06] bg-white p-4 dark:border-white/[.08] dark:bg-zinc-950">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-600">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-400 sm:w-20 dark:text-zinc-600">
               Status
             </span>
-            <div className="flex flex-wrap gap-2">
-              <FilterLink href={query({ status: "" })} active={!status}>
+            <div className="sm:hidden">
+              <FilterSelect
+                value={query({ status: status ?? "" })}
+                options={[
+                  { href: query({ status: "" }), label: "All", count: statusScoped.length },
+                  { href: query({ status: "pending" }), label: "Pending", count: statusCounts.pending ?? 0 },
+                  { href: query({ status: "started" }), label: "Started", count: statusCounts.started ?? 0 },
+                  { href: query({ status: "completed" }), label: "Completed", count: statusCounts.completed ?? 0 },
+                ]}
+              />
+            </div>
+            <div className="hidden flex-wrap gap-2 sm:flex">
+              <FilterLink
+                href={query({ status: "" })}
+                active={!status}
+                count={statusScoped.length}
+              >
                 All
               </FilterLink>
               <FilterLink
                 href={query({ status: "pending" })}
                 active={status === "pending"}
+                count={statusCounts.pending ?? 0}
               >
                 Pending
               </FilterLink>
               <FilterLink
                 href={query({ status: "started" })}
                 active={status === "started"}
+                count={statusCounts.started ?? 0}
               >
                 Started
               </FilterLink>
               <FilterLink
                 href={query({ status: "completed" })}
                 active={status === "completed"}
+                count={statusCounts.completed ?? 0}
               >
                 Completed
               </FilterLink>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-600">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-400 sm:w-20 dark:text-zinc-600">
               Environment
             </span>
-            <div className="flex flex-wrap gap-2">
+            <div className="sm:hidden">
+              <FilterSelect
+                value={query({ environment: environmentMode ?? "" })}
+                options={[
+                  { href: query({ environment: "" }), label: "All", count: environmentScoped.length },
+                  { href: query({ environment: "listen" }), label: "Listen", count: environmentCounts.listen ?? 0 },
+                  { href: query({ environment: "focus" }), label: "Focus", count: environmentCounts.focus ?? 0 },
+                ]}
+              />
+            </div>
+            <div className="hidden flex-wrap gap-2 sm:flex">
               <FilterLink
                 href={query({ environment: "" })}
                 active={!environmentMode}
+                count={environmentScoped.length}
               >
                 All
               </FilterLink>
               <FilterLink
                 href={query({ environment: "listen" })}
                 active={environmentMode === "listen"}
+                count={environmentCounts.listen ?? 0}
               >
                 Listen
               </FilterLink>
               <FilterLink
                 href={query({ environment: "focus" })}
                 active={environmentMode === "focus"}
+                count={environmentCounts.focus ?? 0}
               >
                 Focus
               </FilterLink>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-600">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-400 sm:w-20 dark:text-zinc-600">
               Activity
             </span>
-            <div className="flex flex-wrap gap-2">
-              <FilterLink href={query({ activity: "" })} active={!activityMode}>
+            <div className="sm:hidden">
+              <FilterSelect
+                value={query({ activity: activityMode ?? "" })}
+                options={[
+                  { href: query({ activity: "" }), label: "All", count: activityScoped.length },
+                  { href: query({ activity: "consume" }), label: "Consume", count: activityCounts.consume ?? 0 },
+                  { href: query({ activity: "practice" }), label: "Practice", count: activityCounts.practice ?? 0 },
+                ]}
+              />
+            </div>
+            <div className="hidden flex-wrap gap-2 sm:flex">
+              <FilterLink
+                href={query({ activity: "" })}
+                active={!activityMode}
+                count={activityScoped.length}
+              >
                 All
               </FilterLink>
               <FilterLink
                 href={query({ activity: "consume" })}
                 active={activityMode === "consume"}
+                count={activityCounts.consume ?? 0}
               >
                 Consume
               </FilterLink>
               <FilterLink
                 href={query({ activity: "practice" })}
                 active={activityMode === "practice"}
+                count={activityCounts.practice ?? 0}
               >
                 Practice
               </FilterLink>
@@ -255,7 +336,7 @@ export default async function SessionsPage({
                       href={session.resourceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline decoration-dotted"
+                      className="max-w-full break-all underline decoration-dotted"
                     >
                       {session.resourceTitle ?? "resource"}
                     </a>
