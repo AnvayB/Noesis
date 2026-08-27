@@ -36,6 +36,7 @@ function formatDate(iso: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Los_Angeles",
   });
 }
 
