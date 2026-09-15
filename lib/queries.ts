@@ -1,4 +1,6 @@
-import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
+import { weekStartOf } from "@/lib/capture";
 import { getDb } from "./db";
 import {
   conceptRelations,
@@ -6,11 +8,13 @@ import {
   concepts,
   curiosityItems,
   explainBackConcepts,
+  explainBackRelations,
   explainBacks,
   learningSessions,
   recallAttempts,
   resources,
   sessionConcepts,
+  weeklyFocus,
   type ActivityMode,
   type ConceptAddressedStatus,
   type EnvironmentMode,
@@ -61,7 +65,10 @@ export async function listRecentSessions(limit = 5, filters: SessionFilters = {}
     .from(learningSessions)
     .leftJoin(
       sessionConcepts,
-      eq(sessionConcepts.sessionId, learningSessions.id),
+      and(
+        eq(sessionConcepts.sessionId, learningSessions.id),
+        eq(sessionConcepts.role, "primary"),
+      ),
     )
     .leftJoin(concepts, eq(concepts.id, sessionConcepts.conceptId))
     .leftJoin(resources, eq(resources.id, learningSessions.resourceId))
@@ -109,7 +116,10 @@ export async function getSessionById(id: string) {
     .from(learningSessions)
     .leftJoin(
       sessionConcepts,
-      eq(sessionConcepts.sessionId, learningSessions.id),
+      and(
+        eq(sessionConcepts.sessionId, learningSessions.id),
+        eq(sessionConcepts.role, "primary"),
+      ),
     )
     .leftJoin(concepts, eq(concepts.id, sessionConcepts.conceptId))
     .leftJoin(resources, eq(resources.id, learningSessions.resourceId))
@@ -369,4 +379,157 @@ export async function getSessionsForConcept(conceptId: string) {
     )
     .orderBy(desc(learningSessions.startedAt))
     .all();
+}
+
+// --- The week, the inbox, and what an explanation did -----------------------
+
+
+/** This week's one thing, if one was chosen. */
+export async function getWeeklyFocus() {
+  const db = await getDb();
+  const row = await db
+    .select({
+      weekStart: weeklyFocus.weekStart,
+      id: learningSessions.id,
+      title: learningSessions.title,
+      status: learningSessions.status,
+      startedAt: learningSessions.startedAt,
+      conceptName: concepts.name,
+      conceptSlug: concepts.slug,
+    })
+    .from(weeklyFocus)
+    .innerJoin(learningSessions, eq(learningSessions.id, weeklyFocus.sessionId))
+    .leftJoin(
+      sessionConcepts,
+      and(
+        eq(sessionConcepts.sessionId, learningSessions.id),
+        eq(sessionConcepts.role, "primary"),
+      ),
+    )
+    .leftJoin(concepts, eq(concepts.id, sessionConcepts.conceptId))
+    .where(eq(weeklyFocus.weekStart, weekStartOf()))
+    .get();
+  return row ?? null;
+}
+
+export interface ReflectionConcept {
+  conceptId: string;
+  conceptName: string;
+  conceptSlug: string;
+  status: ConceptAddressedStatus;
+  before: string;
+  after: string;
+  isNew: boolean;
+}
+
+export interface ReflectionRelation {
+  kind: "new" | "strengthened";
+  fromName: string;
+  fromSlug: string;
+  toName: string;
+  toSlug: string;
+  description: string | null;
+}
+
+/**
+ * What the map did because of this session's explanation: each concept's
+ * standing before and after, whether it was met for the first time, and the
+ * cords that were drawn or thickened. Null when nothing has been explained.
+ */
+export async function getReflection(sessionId: string) {
+  const db = await getDb();
+  const back = await db
+    .select({ id: explainBacks.id, createdAt: explainBacks.createdAt })
+    .from(explainBacks)
+    .where(eq(explainBacks.sessionId, sessionId))
+    .orderBy(desc(explainBacks.createdAt))
+    .get();
+  if (!back) return null;
+
+  const addressed = await db
+    .select({
+      conceptId: concepts.id,
+      conceptName: concepts.name,
+      conceptSlug: concepts.slug,
+      firstEncounteredAt: concepts.firstEncounteredAt,
+      status: explainBackConcepts.status,
+    })
+    .from(explainBackConcepts)
+    .innerJoin(concepts, eq(concepts.id, explainBackConcepts.conceptId))
+    .where(eq(explainBackConcepts.explainBackId, back.id))
+    .all();
+
+  const reflectionConcepts: ReflectionConcept[] = [];
+  for (const c of addressed) {
+    const history = await db
+      .select({
+        status: explainBackConcepts.status,
+        explainBackId: explainBackConcepts.explainBackId,
+        createdAt: explainBacks.createdAt,
+      })
+      .from(explainBackConcepts)
+      .innerJoin(explainBacks, eq(explainBacks.id, explainBackConcepts.explainBackId))
+      .where(eq(explainBackConcepts.conceptId, c.conceptId))
+      .orderBy(explainBacks.createdAt)
+      .all();
+    const recalls = await db
+      .select({ outcome: recallAttempts.outcome })
+      .from(recallAttempts)
+      .where(eq(recallAttempts.conceptId, c.conceptId))
+      .all();
+    const outcomes = recalls
+      .map((r) => r.outcome)
+      .filter((o): o is RecallOutcome => o !== null);
+    const earlier = history.filter((h) => h.explainBackId !== back.id && h.createdAt < back.createdAt);
+    reflectionConcepts.push({
+      conceptId: c.conceptId,
+      conceptName: c.conceptName,
+      conceptSlug: c.conceptSlug,
+      status: c.status,
+      before: deriveConceptStatusLabel(earlier.map((h) => h.status), outcomes),
+      after: deriveConceptStatusLabel(history.map((h) => h.status), outcomes),
+      // Created by this explanation, not merely captured earlier as a spore.
+      isNew: c.firstEncounteredAt >= back.createdAt,
+    });
+  }
+
+  const fromConcepts = alias(concepts, "from_concepts");
+  const toConcepts = alias(concepts, "to_concepts");
+  const relations = await db
+    .select({
+      kind: explainBackRelations.kind,
+      fromName: fromConcepts.name,
+      fromSlug: fromConcepts.slug,
+      toName: toConcepts.name,
+      toSlug: toConcepts.slug,
+      description: conceptRelations.description,
+    })
+    .from(explainBackRelations)
+    .innerJoin(conceptRelations, eq(conceptRelations.id, explainBackRelations.relationId))
+    .innerJoin(fromConcepts, eq(fromConcepts.id, conceptRelations.fromConceptId))
+    .innerJoin(toConcepts, eq(toConcepts.id, conceptRelations.toConceptId))
+    .where(eq(explainBackRelations.explainBackId, back.id))
+    .all();
+
+  return {
+    explainBackId: back.id,
+    concepts: reflectionConcepts,
+    relations: relations as ReflectionRelation[],
+  };
+}
+
+/** How much is waiting in the inbox, for the one line on Now that points at Learn. */
+export async function countInbox() {
+  const db = await getDb();
+  const kept = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(learningSessions)
+    .where(eq(learningSessions.status, "pending"))
+    .get();
+  const questions = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(curiosityItems)
+    .where(isNull(curiosityItems.resolvedAt))
+    .get();
+  return { kept: Number(kept?.n ?? 0), questions: Number(questions?.n ?? 0) };
 }

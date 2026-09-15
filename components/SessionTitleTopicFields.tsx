@@ -3,9 +3,6 @@
 import { useState, useTransition } from "react";
 import { suggestTopicAction } from "@/lib/actions/topic";
 
-const inputClassName =
-  "rounded-lg border border-black/[.08] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-white/[.1] dark:bg-zinc-950 dark:text-zinc-100";
-
 export function SessionTitleTopicFields({
   defaultTopic,
 }: {
@@ -26,31 +23,31 @@ export function SessionTitleTopicFields({
 
   return (
     <>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">Title</span>
+      <label className="flex flex-col gap-1">
+        <span className="meta">What are you learning?</span>
         <input
           name="title"
           required
-          placeholder="e.g. Implementing attention from scratch"
+          placeholder="Attention, from scratch"
           onBlur={handleTitleBlur}
-          className={inputClassName}
+          className="field font-serif text-[22px] leading-snug"
         />
       </label>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">Topic</span>
+      <label className="flex flex-col gap-1">
+        <span className="meta">Concept it belongs to</span>
         <input
           name="topic"
           required
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder="e.g. Attention"
-          className={inputClassName}
+          placeholder="Attention"
+          className="field"
         />
-        <span className="text-xs text-zinc-400 dark:text-zinc-600">
+        <span className="meta" aria-live="polite">
           {isPending
-            ? "Suggesting a topic from the title…"
-            : "Links this session to a concept in your knowledge landscape. Auto-filled from the title — edit if it's wrong."}
+            ? "Suggesting one from the title…"
+            : "Where this lands on your map. Suggested from the title; change it if it's wrong."}
         </span>
       </label>
     </>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NavHeader } from "@/components/NavHeader";
+import { SpeakingPromptGenerator } from "@/components/SpeakingPromptGenerator";
 import {
   deriveConceptStatusLabel,
   getConceptBySlug,
@@ -10,23 +11,30 @@ import {
   getSessionsForConcept,
 } from "@/lib/queries";
 import type { RecallOutcome } from "@/lib/db/schema";
-import {
-  CONCEPT_STATUS_LABEL_STYLE,
-  EXPLAIN_BACK_STATUS_STYLE,
-  RECALL_OUTCOME_STYLE,
-  UNDERSTANDING_CLARITY_STYLE,
-  UNDERSTANDING_DEPTH_STYLE,
-} from "@/lib/tagColors";
+import { EXPLAIN_BACK_STATUS_LABEL, RECALL_OUTCOME_LABEL } from "@/lib/tagColors";
 
 export const dynamic = "force-dynamic";
 
 function formatDate(iso: string) {
   return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
-    month: "short",
+    month: "long",
     day: "numeric",
     timeZone: "America/Los_Angeles",
   });
 }
+
+const STATUS_SENTENCE: Record<string, string> = {
+  Retained: "This has stayed with you.",
+  "Can Explain": "You can explain this.",
+  Familiar: "You are getting to know this.",
+  Encountered: "You have met this, but not explained it yet.",
+};
+
+const DEPTH_WORD: Record<string, string> = {
+  surface: "on the surface",
+  solid: "solidly",
+  deep: "in depth",
+};
 
 export default async function ConceptDetailPage({
   params,
@@ -49,151 +57,114 @@ export default async function ConceptDetailPage({
       .map((r) => r.outcome)
       .filter((o): o is RecallOutcome => o !== null),
   );
+  const answered = recallHistory.filter((r) => r.outcome);
 
   return (
-    <div className="flex flex-1 flex-col bg-background font-sans">
-      <NavHeader />
+    <div className="flex flex-1 flex-col">
+      <NavHeader active="Mindscape" />
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-8 py-12">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-medium text-zinc-800 dark:text-zinc-100">
-            {concept.name}
-          </h1>
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs ${CONCEPT_STATUS_LABEL_STYLE[statusLabel] ?? CONCEPT_STATUS_LABEL_STYLE.Encountered}`}
-          >
-            {statusLabel}
-          </span>
-        </div>
+      <main className="page-enter mx-auto flex w-full max-w-2xl flex-1 flex-col gap-12 px-6 py-14 sm:px-10">
+        <header className="flex flex-col gap-3">
+          <p className="meta">On the map</p>
+          <h1 className="title text-[44px] sm:text-[52px]">{concept.name}</h1>
+          <p className="reading text-[17px] text-ink-soft">
+            {STATUS_SENTENCE[statusLabel] ?? STATUS_SENTENCE.Encountered}
+          </p>
+        </header>
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Explain-back history
-          </h2>
+          <h2 className="title text-[23px]">How you have explained it</h2>
           {history.length === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-600">
-              Not explained yet.
-            </p>
+            <p className="meta">Not yet. The first explanation gives it threads.</p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul>
               {history.map((h, i) => (
                 <li
                   key={i}
-                  className="flex flex-col gap-1 rounded-xl border border-black/[.06] bg-white px-4 py-3 text-sm dark:border-white/[.08] dark:bg-zinc-950"
+                  className={`row flex flex-col gap-1 ${i === history.length - 1 ? "row-last" : ""}`}
                 >
-                  <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-600">
-                    <Link
-                      href={`/sessions/${h.sessionId}`}
-                      className="underline decoration-dotted"
-                    >
+                  <div className="flex items-baseline justify-between gap-4">
+                    <Link href={`/sessions/${h.sessionId}`} className="link font-serif text-[19px]">
                       {h.sessionTitle}
                     </Link>
-                    <span>{formatDate(h.createdAt)}</span>
+                    <span className="meta shrink-0">{formatDate(h.createdAt)}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    <span
-                      className={`rounded-full px-2 py-0.5 ${EXPLAIN_BACK_STATUS_STYLE[h.status]}`}
-                    >
-                      {h.status}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 ${UNDERSTANDING_DEPTH_STYLE[h.depth]}`}
-                    >
-                      {h.depth}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 ${UNDERSTANDING_CLARITY_STYLE[h.clarity]}`}
-                    >
-                      {h.clarity}
-                    </span>
-                  </div>
+                  <span className="meta">
+                    {EXPLAIN_BACK_STATUS_LABEL[h.status] ?? h.status}, {DEPTH_WORD[h.depth] ?? h.depth}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
         </section>
 
-        {recallHistory.length > 0 && (
+        {answered.length > 0 && (
           <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Recall history
-            </h2>
-            <ul className="flex flex-col gap-2">
-              {recallHistory
-                .filter((r) => r.outcome)
-                .map((r, i) => (
-                  <li
-                    key={i}
-                    className="flex flex-col gap-1 rounded-xl border border-black/[.06] bg-white px-4 py-3 text-sm dark:border-white/[.08] dark:bg-zinc-950"
-                  >
-                    <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-600">
-                      <span>{r.prompt}</span>
-                      <span>{formatDate(r.createdAt)}</span>
-                    </div>
-                    <span
-                      className={`w-fit rounded-full px-2 py-0.5 text-xs ${RECALL_OUTCOME_STYLE[r.outcome ?? ""]}`}
-                    >
-                      {r.outcome}
-                    </span>
-                  </li>
-                ))}
+            <h2 className="title text-[23px]">When it was asked back</h2>
+            <ul>
+              {answered.map((r, i) => (
+                <li
+                  key={i}
+                  className={`row flex flex-col gap-1 ${i === answered.length - 1 ? "row-last" : ""}`}
+                >
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span className="font-serif text-[17px] italic">{r.prompt}</span>
+                    <span className="meta shrink-0">{formatDate(r.createdAt)}</span>
+                  </div>
+                  <span className="meta">
+                    You {RECALL_OUTCOME_LABEL[r.outcome ?? ""] ?? r.outcome}.
+                  </span>
+                </li>
+              ))}
             </ul>
           </section>
         )}
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Related concepts
-          </h2>
+          <h2 className="title text-[23px]">Connected to</h2>
           {related.length === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-600">
-              No connections yet.
-            </p>
+            <p className="meta">Nothing yet. Connections appear when an explanation makes one.</p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-3">
               {related.map((r, i) => (
-                <li key={i} className="text-sm text-zinc-600 dark:text-zinc-300">
+                <li key={i} className="text-[15px] leading-relaxed">
                   {r.conceptSlug ? (
-                    <Link
-                      href={`/concepts/${r.conceptSlug}`}
-                      className="underline decoration-dotted"
-                    >
+                    <Link href={`/concepts/${r.conceptSlug}`} className="link font-serif text-[19px]">
                       {r.conceptName}
                     </Link>
                   ) : (
-                    r.conceptName
+                    <span className="font-serif text-[19px]">{r.conceptName}</span>
                   )}
-                  {r.description && (
-                    <span className="text-zinc-400 dark:text-zinc-600">
-                      {" "}
-                      — {r.description}
-                    </span>
-                  )}
+                  {r.description && <span className="text-ink-soft"> {r.description}</span>}
                 </li>
               ))}
             </ul>
           )}
         </section>
 
+        {history.length > 0 && (
+          <section className="sheet flex flex-col gap-4">
+            <p className="meta">Say it out loud</p>
+            <p className="reading text-[17px]">
+              Explaining to no one in particular still counts. Ask for a prompt and answer it
+              without looking anything up.
+            </p>
+            <SpeakingPromptGenerator conceptId={concept.id} />
+          </section>
+        )}
+
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Sessions
-          </h2>
+          <h2 className="title text-[23px]">Sessions</h2>
           {sessions.length === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-600">None yet.</p>
+            <p className="meta">None yet.</p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-2">
               {sessions.map((s) => (
-                <li key={s.id} className="text-sm">
-                  <Link
-                    href={`/sessions/${s.id}`}
-                    className="text-zinc-600 underline decoration-dotted dark:text-zinc-300"
-                  >
+                <li key={s.id} className="flex items-baseline gap-3 text-[15px]">
+                  <Link href={`/sessions/${s.id}`} className="link">
                     {s.title}
                   </Link>
-                  <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-600">
-                    {formatDate(s.startedAt)}
-                  </span>
+                  <span className="meta">{formatDate(s.startedAt)}</span>
                 </li>
               ))}
             </ul>

@@ -57,13 +57,23 @@ export class OpenAIProvider implements AIProvider {
             "You evaluate a learner's own explanation of concepts they just studied. " +
             "Be specific and evidence-based. Never produce a single numeric score — " +
             "report structured qualitative findings only.\n\n" +
-            "concepts_addressed is the canonical list of concept names for this " +
-            "explanation — keep it short (the handful of real concepts actually " +
-            "discussed, not every noun phrase). For connections_made, the 'from' and " +
-            "'to' values MUST each exactly match a name already used in " +
-            "concepts_addressed, or one of the given prior known concepts — never " +
-            "invent a new sub-concept name there. This feeds a persistent concept " +
-            "graph, so consistent naming across calls matters more than precision.",
+            "Your output feeds a persistent map of what the learner knows, so naming " +
+            "discipline matters more than precision.\n\n" +
+            "conceptsAddressed: every concept the learner substantively explains, " +
+            "including ones beyond the session concept, each with a status. A concept " +
+            "name is a short noun phrase of one to three words, as it would appear as a " +
+            "textbook index entry: 'Softmax', 'Vanishing gradients', 'Scaled dot-product " +
+            "attention'. Never 'X rationale', 'X explanation', or a clause. If a prior " +
+            "known concept name means the same thing, reuse it exactly.\n\n" +
+            "connectionsMade: relationships the learner drew between concepts. Both " +
+            "'from' and 'to' must be names that appear in conceptsAddressed or in the " +
+            "prior known concepts, spelled identically. If you want to connect to " +
+            "something, add it to conceptsAddressed first.\n\n" +
+            "omissions: important points about the session concept that the learner " +
+            "did not cover, each written as a short sentence describing the point, " +
+            "never a bare concept name.\n\n" +
+            "followUpQuestion: one question the learner could go and find out next, " +
+            "phrased as something to wonder about rather than a test.",
         },
         {
           role: "user",

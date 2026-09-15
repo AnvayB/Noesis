@@ -1,36 +1,398 @@
 @import "tailwindcss";
 
 /* Dark mode is toggled by a `.dark` class on <html> (see ThemeToggle +
-   the inline script in layout.tsx that sets it before first paint), not
-   only by OS preference — this makes `dark:` utilities respond to the
-   explicit toggle instead of just prefers-color-scheme. */
+   the inline script in layout.tsx that sets it before first paint). Every
+   color below is a token, so components never need `dark:` utilities:
+   the .dark block swaps the tokens and the same class reads correctly. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Survey: paper, ink, and the six field hues ─────────────────────────
+   Day is an unbleached survey sheet, greyer than cream on purpose. Night is
+   the same sheet with ink and paper traded, not a separate dark theme.
+   `lamp` is the one accent that is not a field hue: it marks what is
+   happening now. The field hues belong to the Mindscape and to references
+   to concepts, and nowhere else. */
 :root {
-  --background: #f2ebe3;
-  --foreground: #171717;
+  --paper: #e9e6dd;
+  --sheet: #f4f2ea;
+  --ink: #1b2a33;
+  --ink-soft: #5b6770;
+  --rule: rgba(27, 42, 51, 0.16);
+  --rule-strong: rgba(27, 42, 51, 0.34);
+  --lamp: #c99a2e;
+  --ochre: #b8863b;
+  --teal: #3f7f82;
+  --rose: #b5566a;
+  --slate: #5d6b8a;
+  --moss: #6f8a4a;
+  --copper: #a9603a;
+  --sheet-shadow: 0 1px 0 rgba(27, 42, 51, 0.12), 0 18px 40px -28px rgba(27, 42, 51, 0.5);
+  --texture-opacity: 0.32;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+.dark {
+  --paper: #15191c;
+  --sheet: #1c2226;
+  --ink: #e6e1d6;
+  --ink-soft: #9aa3a8;
+  --rule: rgba(230, 225, 214, 0.14);
+  --rule-strong: rgba(230, 225, 214, 0.3);
+  --lamp: #d8ad4a;
+  --ochre: #cfa04f;
+  --teal: #5a9ea1;
+  --rose: #c9738a;
+  --slate: #8093b3;
+  --moss: #8ba566;
+  --copper: #c47a52;
+  --sheet-shadow: 0 1px 0 rgba(230, 225, 214, 0.08), 0 18px 40px -28px rgba(0, 0, 0, 0.8);
+  --texture-opacity: 0.22;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-lamp: var(--lamp);
+  --color-ochre: var(--ochre);
+  --color-teal: var(--teal);
+  --color-rose: var(--rose);
+  --color-slate: var(--slate);
+  --color-moss: var(--moss);
+  --color-copper: var(--copper);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+  --ease-quiet: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* The whole app sits on one survey sheet: a faint contour texture, fixed
+   to the viewport, under every page. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--texture-opacity);
+  background-repeat: repeat;
+  background-size: 720px 720px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='720' height='720' viewBox='0 0 720 720' fill='none' stroke='%237b8489' stroke-width='0.8' stroke-opacity='0.35'><path d='M120 260c40-70 150-90 210-40s70 140 10 190-190 60-240 0-20-80 20-150z'/><path d='M150 270c30-50 120-70 170-30s60 110 10 150-150 50-190 0-20-70 10-120z'/><path d='M180 280c20-32 90-50 130-20s45 82 8 112-110 38-142 2-16-56 4-94z'/><path d='M470 520c60-60 160-40 190 20s-10 150-80 170-160-10-170-70 10-70 60-120z'/><path d='M495 530c45-45 125-30 148 16s-8 116-62 132-124-8-132-54 8-56 46-94z'/><path d='M520 542c30-30 90-20 106 12s-6 84-44 96-90-6-96-40 6-40 34-68z'/><path d='M40 600c30-40 110-40 140 0s20 90-20 110-110 10-130-30-10-50 10-80z'/><path d='M560 120c40-40 120-30 140 20s-20 110-70 120-120-10-130-60 20-50 60-80z'/><path d='M585 132c28-28 86-22 100 14s-14 80-50 87-88-8-94-44 14-36 44-57z'/></svg>");
+}
+
+::selection {
+  background: color-mix(in srgb, var(--lamp) 35%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 button:not(:disabled),
 a,
 [role="button"]:not([aria-disabled="true"]) {
   cursor: pointer;
+}
+
+@layer components {
+  /* Titles are set light in the serif, never bold. */
+  .title {
+    font-family: var(--font-fraunces), Georgia, serif;
+    font-weight: 300;
+    letter-spacing: -0.012em;
+    line-height: 1.08;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  /* Prose that is read, not operated: explanations, lessons, prompts. */
+  .reading {
+    font-family: var(--font-fraunces), Georgia, serif;
+    font-size: 19px;
+    line-height: 1.6;
+    max-width: 64ch;
+    color: var(--ink);
+  }
+
+  /* A question the app asks always looks like a question. */
+  .question {
+    font-family: var(--font-fraunces), Georgia, serif;
+    font-style: italic;
+    font-size: 20px;
+    line-height: 1.45;
+    color: var(--ink);
+    text-wrap: pretty;
+  }
+
+  .meta {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  /* The one raised surface: where you write, and where you are asked. */
+  .sheet {
+    background: var(--sheet);
+    border-top: 1px solid var(--rule-strong);
+    border-radius: 2px;
+    box-shadow: var(--sheet-shadow);
+    padding: 28px 28px 24px;
+  }
+  @media (max-width: 640px) {
+    .sheet {
+      padding: 20px 18px 18px;
+    }
+  }
+
+  /* Rows in a list are separated by hairlines, never boxed. */
+  .row {
+    border-top: 1px solid var(--rule);
+    padding-block: 14px;
+  }
+  .row-last {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .link {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--rule-strong);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    transition:
+      text-decoration-color 240ms var(--ease-quiet),
+      text-underline-offset 240ms var(--ease-quiet);
+  }
+  .link:hover {
+    text-decoration-color: var(--ink);
+    text-underline-offset: 5px;
+  }
+  .link-soft {
+    color: var(--ink-soft);
+  }
+  .link-soft:hover {
+    color: var(--ink);
+  }
+
+  .nav-link {
+    font-size: 14px;
+    color: var(--ink-soft);
+    padding-bottom: 3px;
+    border-bottom: 1px solid transparent;
+    transition:
+      color 240ms var(--ease-quiet),
+      border-color 240ms var(--ease-quiet);
+  }
+  .nav-link:hover {
+    color: var(--ink);
+  }
+  .nav-link-active {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  /* Buttons say what happens. One filled button per screen at most. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    transition:
+      background-color 240ms var(--ease-quiet),
+      border-color 240ms var(--ease-quiet),
+      color 240ms var(--ease-quiet),
+      opacity 240ms var(--ease-quiet);
+  }
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .btn-ink {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-ink:not(:disabled):hover {
+    opacity: 0.88;
+  }
+  .btn-line {
+    border-color: var(--rule-strong);
+    color: var(--ink);
+    background: transparent;
+  }
+  .btn-line:not(:disabled):hover {
+    border-color: var(--ink);
+  }
+  .btn-quiet {
+    padding-inline: 4px;
+    color: var(--ink-soft);
+    background: transparent;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+  }
+  .btn-quiet:not(:disabled):hover {
+    color: var(--ink);
+    text-decoration-color: var(--rule-strong);
+  }
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  /* Form fields are lines on paper, not boxes. */
+  .field {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--rule-strong);
+    border-radius: 0;
+    padding: 8px 0;
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink);
+    transition: border-color 240ms var(--ease-quiet);
+  }
+  .field::placeholder {
+    color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
+  }
+  .field:focus {
+    outline: none;
+    border-bottom-color: var(--lamp);
+  }
+  select.field {
+    appearance: auto;
+    padding-right: 8px;
+  }
+  textarea.field {
+    resize: vertical;
+  }
+
+  /* The writing surface: serif, roomy, no box. The sheet is the box. */
+  .writing {
+    display: block;
+    width: 100%;
+    min-height: 240px;
+    background: transparent;
+    border: 0;
+    padding: 8px 0;
+    resize: vertical;
+    font-family: var(--font-fraunces), Georgia, serif;
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .writing::placeholder {
+    color: color-mix(in srgb, var(--ink-soft) 65%, transparent);
+    font-style: italic;
+  }
+  .writing:focus {
+    outline: none;
+  }
+
+  .radio {
+    accent-color: var(--ink);
+  }
+
+  /* A line of choices, one of which is current. */
+  .choice {
+    font-size: 14px;
+    color: var(--ink-soft);
+    padding-bottom: 2px;
+    border-bottom: 1px solid transparent;
+    transition:
+      color 240ms var(--ease-quiet),
+      border-color 240ms var(--ease-quiet);
+  }
+  .choice:hover {
+    color: var(--ink);
+  }
+  .choice-active {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  /* The lamp: what is happening now. */
+  .lamp-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--lamp);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--lamp) 22%, transparent);
+    animation: breathe 4s var(--ease-quiet) infinite;
+  }
+
+  .page-enter {
+    animation: page-enter 700ms var(--ease-quiet) both;
+  }
+
+  /* The map fades into the paper it sits on. */
+  .map-fade {
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black 78%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 0%, black 78%, transparent 100%);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

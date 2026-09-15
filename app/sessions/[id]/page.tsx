@@ -1,257 +1,295 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CaptureForm } from "@/components/CaptureForm";
 import { ExplainBackInput } from "@/components/ExplainBackInput";
+import { Mindscape } from "@/components/Mindscape";
 import { NavHeader } from "@/components/NavHeader";
-import { completeSessionAction, startSessionAction } from "@/lib/actions/sessions";
-import { submitExplainBackAction } from "@/lib/actions/explainBack";
-import { getExplainBackForSession, getSessionById } from "@/lib/queries";
+import { ResourcePlate } from "@/components/ResourcePlate";
+import { SubmitButton } from "@/components/SubmitButton";
+import { retryAnalysisAction, submitExplainBackAction } from "@/lib/actions/explainBack";
+import { startSessionAction } from "@/lib/actions/sessions";
 import {
-  ACTIVITY_MODE_STYLE,
-  CONCEPT_TAG_STYLE,
-  ENVIRONMENT_MODE_STYLE,
-  EXPLAIN_BACK_STATUS_STYLE as statusStyle,
-  SESSION_STATUS_LABEL,
-  SESSION_STATUS_STYLE,
+  getExplainBackForSession,
+  getReflection,
+  getSessionById,
+  listMindscapeConcepts,
+  listMindscapeRelations,
+} from "@/lib/queries";
+import {
+  ACTIVITY_MODE_LABEL,
+  ENVIRONMENT_MODE_LABEL,
+  EXPLAIN_BACK_STATUS_LABEL,
 } from "@/lib/tagColors";
 
 export const dynamic = "force-dynamic";
 
 function formatDate(iso: string) {
-  return new Date(iso.replace(" ", "T") + "Z").toLocaleString(undefined, {
-    month: "short",
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
+    month: "long",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
     timeZone: "America/Los_Angeles",
   });
 }
 
+const DEPTH_WORD: Record<string, string> = {
+  surface: "stayed on the surface",
+  solid: "held together",
+  deep: "went deep",
+};
+const CLARITY_WORD: Record<string, string> = {
+  unclear: "was hard to follow",
+  reasonable: "read clearly enough",
+  very_clear: "read very clearly",
+};
+const STANDING: Record<string, string> = {
+  Encountered: "met",
+  Familiar: "familiar",
+  "Can Explain": "something you can explain",
+  Retained: "retained",
+};
+
 export default async function SessionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ unread?: string }>;
 }) {
   const { id } = await params;
+  const { unread } = await searchParams;
   const session = await getSessionById(id);
   if (!session) notFound();
 
   const result = await getExplainBackForSession(id);
+  const reflection = result?.analysis ? await getReflection(id) : null;
+  const [mapConcepts, mapRelations] = reflection
+    ? await Promise.all([listMindscapeConcepts(), listMindscapeRelations()])
+    : [[], []];
+
+  const when =
+    session.status === "pending"
+      ? `Kept on ${formatDate(session.startedAt)}`
+      : session.status === "started"
+        ? `In progress since ${formatDate(session.startedAt)}`
+        : `Explained on ${formatDate(session.startedAt)}`;
+  const how = `${ENVIRONMENT_MODE_LABEL[session.environmentMode]}, ${ACTIVITY_MODE_LABEL[session.activityMode]}`;
 
   return (
-    <div className="flex flex-1 flex-col bg-background font-sans">
+    <div className="flex flex-1 flex-col">
       <NavHeader
         active="Learn"
         right={
-          <div className="flex items-center gap-4">
-            <Link
-              href={`/sessions/${session.id}/edit`}
-              className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            >
-              Edit
-            </Link>
-            <Link
-              href="/sessions"
-              className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            >
-              All sessions
-            </Link>
-          </div>
+          <Link href={`/sessions/${session.id}/edit`} className="link link-soft text-sm">
+            Edit
+          </Link>
         }
       />
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-8 py-12">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-lg font-medium text-zinc-800 dark:text-zinc-100">
-            {session.title}
-          </h1>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-            <span
-              className={`rounded-full px-2 py-0.5 ${SESSION_STATUS_STYLE[session.status]}`}
-            >
-              {SESSION_STATUS_LABEL[session.status]}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 ${ENVIRONMENT_MODE_STYLE[session.environmentMode]}`}
-            >
-              {session.environmentMode}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 ${ACTIVITY_MODE_STYLE[session.activityMode]}`}
-            >
-              {session.activityMode}
-            </span>
-            {session.conceptSlug && (
-              <Link
-                href={`/concepts/${session.conceptSlug}`}
-                className={`rounded-full px-2 py-0.5 underline decoration-dotted ${CONCEPT_TAG_STYLE}`}
-              >
+      <main className="page-enter mx-auto flex w-full max-w-2xl flex-1 flex-col gap-12 px-6 py-14 sm:px-10">
+        <header className="flex flex-col gap-4">
+          <p className="meta">
+            {session.status === "started" && (
+              <span className="lamp-dot mr-2 align-middle" aria-hidden="true" />
+            )}
+            {when}; {how}.
+          </p>
+          <h1 className="title text-[34px] sm:text-[40px]">{session.title}</h1>
+          {session.conceptSlug && (
+            <p className="meta">
+              On the map as{" "}
+              <Link href={`/concepts/${session.conceptSlug}`} className="link">
                 {session.conceptName}
               </Link>
-            )}
-            <span>{formatDate(session.startedAt)}</span>
-            {session.durationMinutes != null && <span>{session.durationMinutes} min</span>}
-          </div>
-          {session.resourceUrl && (
-            <a
-              href={session.resourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-zinc-500 underline decoration-dotted dark:text-zinc-400"
-            >
-              {session.resourceTitle ?? session.resourceUrl}
-            </a>
+              .
+            </p>
           )}
           {session.notes && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">{session.notes}</p>
+            <p className="max-w-[60ch] text-[15px] leading-relaxed text-ink-soft">{session.notes}</p>
           )}
-        </div>
+        </header>
+
+        <ResourcePlate
+          type={session.resourceType ?? null}
+          url={session.resourceUrl ?? null}
+          title={session.resourceTitle ?? null}
+          durationMinutes={session.durationMinutes ?? null}
+        />
 
         {session.status === "pending" ? (
-          <div className="flex flex-col gap-3 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950">
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">
-              This is sitting in your backlog. Start it once you actually
-              begin watching or reading — you don&apos;t need to log anything
-              until then.
+          <section className="sheet flex flex-col gap-5">
+            <p className="reading text-[17px]">
+              This is kept for later. Start it when you actually begin watching or
+              reading. There is nothing to log until then.
             </p>
             <form action={startSessionAction}>
               <input type="hidden" name="sessionId" value={session.id} />
-              <button
-                type="submit"
-                className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-              >
+              <button type="submit" className="btn btn-ink">
                 Start learning
               </button>
             </form>
-          </div>
+          </section>
         ) : !result ? (
-          <div className="flex flex-col gap-3">
-            <form
-              action={submitExplainBackAction}
-              className="flex flex-col gap-3 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950"
-            >
+          <section className="flex flex-col gap-4">
+            <form action={submitExplainBackAction} className="sheet flex flex-col gap-5">
               <input type="hidden" name="sessionId" value={session.id} />
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                  Explain what you just learned
-                </span>
-                <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                  As if to a friend who understands the basics but hasn&apos;t seen this
-                  specific topic. Take your time — nothing here interrupts you.
-                </span>
-              </label>
+              <div className="flex flex-col gap-2">
+                <p className="question">
+                  When you are ready, explain what you learned, as if to a friend who
+                  knows the basics but has not seen this.
+                </p>
+                <p className="meta">Take your time. Nothing here interrupts you.</p>
+              </div>
               <ExplainBackInput />
               <div>
-                <button
-                  type="submit"
-                  className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                >
-                  Submit explanation
-                </button>
+                <SubmitButton pendingLabel="Reading your explanation…">Save explanation</SubmitButton>
               </div>
             </form>
-            {session.status === "started" && (
-              <form action={completeSessionAction} className="self-start">
-                <input type="hidden" name="sessionId" value={session.id} />
-                <button
-                  type="submit"
-                  className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-                >
-                  Mark as completed without explaining
-                </button>
-              </form>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6">
-            <div className="rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950">
-              <div className="mb-2 flex items-center gap-2">
-                <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                  Your explanation
-                </h2>
-                {result.explainBack.inputMode === "voice" && (
-                  <span className="rounded-full bg-black/[.04] px-2 py-0.5 text-xs text-zinc-500 dark:bg-white/[.08] dark:text-zinc-400">
-                    voice
-                  </span>
-                )}
-              </div>
-              <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                {result.explainBack.rawText}
-              </p>
+          </section>
+        ) : !result.analysis ? (
+          <section className="flex flex-col gap-6">
+            <div className="sheet flex flex-col gap-3">
+              <p className="meta">Your explanation, saved</p>
+              <p className="reading whitespace-pre-wrap">{result.explainBack.rawText}</p>
             </div>
+            <div className="flex flex-col gap-3">
+              <p className="reading text-[17px]">
+                {unread
+                  ? "It is saved, but it could not be read just now. Nothing is lost."
+                  : "It is saved, and has not been read yet."}
+              </p>
+              <form action={retryAnalysisAction}>
+                <input type="hidden" name="explainBackId" value={result.explainBack.id} />
+                <SubmitButton pendingLabel="Reading your explanation…">Read it now</SubmitButton>
+              </form>
+            </div>
+          </section>
+        ) : (
+          <div className="flex flex-col gap-12">
+            <section className="sheet flex flex-col gap-3">
+              <p className="meta">
+                Your explanation{result.explainBack.inputMode === "voice" ? ", spoken" : ""}
+              </p>
+              <p className="reading whitespace-pre-wrap">{result.explainBack.rawText}</p>
+            </section>
 
-            {result.analysis && (
-              <div className="flex flex-col gap-4 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950">
-                <div className="flex flex-wrap gap-2">
-                  {result.conceptStatuses.map((c) => (
-                    <Link
-                      key={c.conceptId}
-                      href={`/concepts/${c.conceptSlug}`}
-                      className={`rounded-full px-2.5 py-1 text-xs ${statusStyle[c.status]}`}
-                    >
-                      {c.conceptName} · {c.status}
-                    </Link>
-                  ))}
+            <section className="flex flex-col gap-10" aria-label="What came of it">
+              {result.analysis.connectionsMade.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="title text-[23px]">What you connected</h2>
+                  <ul className="flex flex-col gap-3">
+                    {result.analysis.connectionsMade.map((c, i) => (
+                      <li key={i} className="reading text-[17px]">
+                        <span className="font-medium">{c.from}</span> and{" "}
+                        <span className="font-medium">{c.to}</span>: {c.description}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm text-zinc-600 dark:text-zinc-300">
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">Depth</span>
-                    <p>{result.analysis.depth}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">Clarity</span>
-                    <p>{result.analysis.clarity}</p>
-                  </div>
-                </div>
-
-                {result.analysis.omissions.length > 0 && (
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                      Omissions
-                    </span>
-                    <ul className="list-inside list-disc text-sm text-zinc-600 dark:text-zinc-300">
-                      {result.analysis.omissions.map((o, i) => (
-                        <li key={i}>{o}</li>
-                      ))}
-                    </ul>
-                  </div>
+              <div className="flex flex-col gap-4">
+                <h2 className="title text-[23px]">What the map did</h2>
+                {reflection && (
+                  <ul className="flex flex-col gap-2">
+                    {reflection.concepts.map((c) => (
+                      <li key={c.conceptId} className="text-[15px] leading-relaxed">
+                        <Link href={`/concepts/${c.conceptSlug}`} className="link font-serif text-[19px]">
+                          {c.conceptName}
+                        </Link>
+                        <span className="text-ink-soft">
+                          {" "}
+                          {c.isNew
+                            ? `appeared on the map for the first time, ${EXPLAIN_BACK_STATUS_LABEL[c.status] ?? c.status}.`
+                            : c.before === c.after
+                              ? `was ${EXPLAIN_BACK_STATUS_LABEL[c.status] ?? c.status}; it stays ${STANDING[c.after] ?? c.after}.`
+                              : `went from ${STANDING[c.before] ?? c.before} to ${STANDING[c.after] ?? c.after}.`}
+                        </span>
+                      </li>
+                    ))}
+                    {reflection.relations.map((r, i) => (
+                      <li key={`r${i}`} className="text-[15px] leading-relaxed">
+                        <span className="text-ink-soft">
+                          {r.kind === "new" ? "A new cord joins " : "The cord between "}
+                        </span>
+                        <Link href={`/concepts/${r.fromSlug}`} className="link">
+                          {r.fromName}
+                        </Link>
+                        <span className="text-ink-soft"> and </span>
+                        <Link href={`/concepts/${r.toSlug}`} className="link">
+                          {r.toName}
+                        </Link>
+                        <span className="text-ink-soft">
+                          {r.kind === "new" ? "." : " thickened."}
+                        </span>
+                      </li>
+                    ))}
+                    {reflection.concepts.length === 0 && reflection.relations.length === 0 && (
+                      <li className="meta">Nothing on the map moved this time.</li>
+                    )}
+                  </ul>
                 )}
-
-                {result.analysis.misconceptions.length > 0 && (
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                      Misconceptions
-                    </span>
-                    <ul className="list-inside list-disc text-sm text-zinc-600 dark:text-zinc-300">
-                      {result.analysis.misconceptions.map((m, i) => (
-                        <li key={i}>{m.description}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {result.analysis.connectionsMade.length > 0 && (
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                      Connections
-                    </span>
-                    <ul className="list-inside list-disc text-sm text-zinc-600 dark:text-zinc-300">
-                      {result.analysis.connectionsMade.map((c, i) => (
-                        <li key={i}>
-                          {c.from} → {c.to}: {c.description}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {result.analysis.followUpQuestion && (
-                  <div className="rounded-xl bg-black/[.03] p-4 text-sm text-zinc-700 dark:bg-white/[.06] dark:text-zinc-200">
-                    {result.analysis.followUpQuestion}
+                {reflection && mapConcepts.length > 0 && (
+                  <div className="map-fade -mx-2 h-[320px]">
+                    <Mindscape
+                      concepts={mapConcepts}
+                      relations={mapRelations}
+                      height={320}
+                      highlightIds={reflection.concepts.map((c) => c.conceptId)}
+                    />
                   </div>
                 )}
               </div>
-            )}
+
+              {result.analysis.omissions.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="title text-[23px]">What you left out</h2>
+                  <ul className="flex flex-col gap-2">
+                    {result.analysis.omissions.map((o, i) => (
+                      <li key={i} className="reading text-[17px]">
+                        {o}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result.analysis.misconceptions.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="title text-[23px]">Worth correcting</h2>
+                  <ul className="flex flex-col gap-2">
+                    {result.analysis.misconceptions.map((m, i) => (
+                      <li key={i} className="reading text-[17px]">
+                        {m.description}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="meta">
+                Overall, the explanation {DEPTH_WORD[result.analysis.depth] ?? result.analysis.depth} and{" "}
+                {CLARITY_WORD[result.analysis.clarity] ?? result.analysis.clarity}.
+              </p>
+
+              <div className="flex flex-col gap-5 border-t border-rule pt-8">
+                <h2 className="title text-[23px]">What next</h2>
+                {result.analysis.followUpQuestion && (
+                  <p className="question">{result.analysis.followUpQuestion}</p>
+                )}
+                <CaptureForm
+                  returnTo="/learn"
+                  compact
+                  hint={false}
+                  defaultValue={result.analysis.followUpQuestion ?? ""}
+                />
+                <p className="meta">
+                  Keep the question for later, start on it now, or paste the next link.{" "}
+                  <Link href="/" className="link">
+                    Or go back to the map.
+                  </Link>
+                </p>
+              </div>
+            </section>
           </div>
         )}
       </main>

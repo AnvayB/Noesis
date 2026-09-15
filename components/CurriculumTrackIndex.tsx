@@ -5,17 +5,17 @@ import { listModuleProgressSummaries } from "@/lib/curriculum/queries";
 import type { CurriculumLevel, CurriculumVerdict } from "@/lib/db/schema";
 
 const LEVEL_LABELS: Record<CurriculumLevel, string> = {
-  understand: "Understand",
-  explain: "Explain",
-  trace: "Trace",
-  modify: "Modify",
-  design: "Design",
+  understand: "Read",
+  explain: "Explained",
+  trace: "Traced",
+  modify: "Modified",
+  design: "Designed",
 };
 
-const verdictStyle: Record<CurriculumVerdict, string> = {
-  solid: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  partial: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  off_track: "bg-black/[.04] text-zinc-500 dark:bg-white/[.08] dark:text-zinc-400",
+const VERDICT_WORD: Record<CurriculumVerdict, string> = {
+  solid: "last attempt held",
+  partial: "last attempt partly held",
+  off_track: "last attempt went off track",
 };
 
 export async function CurriculumTrackIndex({
@@ -31,55 +31,41 @@ export async function CurriculumTrackIndex({
   const summaryBySlug = new Map(summaries.map((s) => [s.module.slug, s]));
 
   return (
-    <div className="flex flex-1 flex-col bg-background font-sans">
-      <NavHeader active={label} />
+    <div className="flex flex-1 flex-col">
+      <NavHeader active="Learn" />
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-8 py-12">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-lg font-medium text-zinc-800 dark:text-zinc-100">{label}</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+      <main className="page-enter mx-auto flex w-full max-w-3xl flex-1 flex-col gap-14 px-6 py-14 sm:px-10">
+        <div className="flex flex-col gap-4">
+          <h1 className="title text-[40px]">{label}</h1>
+          <p className="reading text-[17px] text-ink-soft">{description}</p>
         </div>
 
         {phases.map((phase) => (
           <section key={phase.phase} className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              {phase.phase}
-            </h2>
-            <ul className="flex flex-col gap-3">
-              {phase.modules.map((module) => {
+            <h2 className="title text-[23px]">{phase.phase}</h2>
+            <ul>
+              {phase.modules.map((module, i) => {
                 const summary = summaryBySlug.get(module.slug);
                 const furthestLevel = summary?.furthestLevel ?? null;
                 const verdict = summary?.latestVerdict ?? null;
                 return (
-                  <li key={module.slug}>
-                    <Link
-                      href={`${basePath}/${module.slug}`}
-                      className="flex flex-col gap-1.5 rounded-xl border border-black/[.06] bg-white px-5 py-4 dark:border-white/[.08] dark:bg-zinc-950"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="font-medium text-zinc-800 dark:text-zinc-100">
+                  <li
+                    key={module.slug}
+                    className={`row ${i === phase.modules.length - 1 ? "row-last" : ""}`}
+                  >
+                    <Link href={`${basePath}/${module.slug}`} className="group flex flex-col gap-1.5">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <span className="link font-serif text-[21px] leading-snug">
                           {module.title}
                         </span>
-                        <span
-                          className={
-                            furthestLevel
-                              ? "whitespace-nowrap rounded-full bg-black/[.04] px-2.5 py-1 text-xs text-zinc-600 dark:bg-white/[.08] dark:text-zinc-300"
-                              : "whitespace-nowrap rounded-full bg-black/[.04] px-2.5 py-1 text-xs text-zinc-400 dark:bg-white/[.08] dark:text-zinc-600"
-                          }
-                        >
+                        <span className={furthestLevel ? "meta shrink-0 text-ink" : "meta shrink-0"}>
                           {furthestLevel ? LEVEL_LABELS[furthestLevel] : "Not started"}
                         </span>
                       </div>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      <p className="max-w-[62ch] text-[15px] leading-relaxed text-ink-soft">
                         {module.summary}
                       </p>
-                      {verdict && (
-                        <span
-                          className={`w-fit rounded-full px-2 py-0.5 text-xs ${verdictStyle[verdict]}`}
-                        >
-                          {verdict.replace("_", " ")}
-                        </span>
-                      )}
+                      {verdict && <span className="meta">{VERDICT_WORD[verdict]}.</span>}
                     </Link>
                   </li>
                 );

@@ -7,24 +7,32 @@ architecture plan this was built from.
 
 ## Pages
 
-- **Home** (`/`) — Mindscape preview, backlog, recent sessions, curiosity inbox.
-- **Learn** (`/sessions`) — add learning material (title, AI-suggested topic,
-  resource type, environment/activity mode), start/complete sessions, and
-  explain back what you learned for LLM-graded feedback.
-- **Practice** (`/practice`) — casual recall quizzes and "explain it to a
-  nontechnical person" speaking prompts, generated from concepts you've
-  already logged.
-- **Mindscape** (`/mindscape`) — the force-directed concept graph: nodes are
-  concepts you've learned about, edges are LLM-inferred relationships between
-  them, both built up incrementally from your explain-backs.
-- **Learn Noesis** (`/learn-noesis`) — a self-study curriculum on how this app
-  is actually built, graded against the real implementation (see
-  `lib/curriculum/`).
-- **Arteris 101** (`/arteris-101`) — a second curriculum track teaching
-  semiconductor/SoC/interconnect fundamentals and the Arteris product lineup;
-  a second, generalized use of the same curriculum engine as Learn Noesis (see
-  the "Multi-Track Curriculum" module inside Learn Noesis itself for how the
-  two share one grading system).
+Three places, plus the pages they open.
+
+- **Now** (`/`) — the Mindscape, this week's one thing, anything in progress
+  with a Continue, the daily recall question, and the capture field.
+- **Learn** (`/learn`) — the capture field (paste a link or write a question;
+  Start now or Keep for later), what is in progress, what is kept for later,
+  open questions, and links to History, the detailed add form, and the tracks.
+- **Mindscape** (`/mindscape`) — the map on its own. Threads are what you have
+  explained, cords what you have connected, contours what has stayed.
+- **Session** (`/sessions/[id]`) — the resource (YouTube embeds inline), the
+  writing sheet, and after an explanation the Reflect view: what you
+  connected, what the map did, what you left out, and a capture field
+  prefilled with the follow-up question.
+- **Concept** (`/concepts/[slug]`) — a concept's story: explanations over
+  time, recalls, connections, and a "say it out loud" prompt.
+- **History** (`/sessions`) — every session, filterable. `/sessions/new` is the
+  detailed add form for when a link is not enough.
+- **Tracks** — `/learn-noesis` and `/arteris-101`, graded self-study
+  curricula, reached from Learn (see `lib/curriculum/`).
+
+The core loop: capture → start → learn from the source → explain in your
+own words → see what the map did → keep or start the next question.
+
+If `OPENAI_API_KEY` is missing or the model call fails, an explanation is
+still saved and the session page offers "Read it now" to retry; concept
+names fall back to the source title until the model is available.
 
 ## Setup
 
