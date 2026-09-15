@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settling Ground</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+        .container { display: flex; min-height: 100vh; padding: 20px; gap: 20px; }
+        .sidebar {
+            width: 320px; flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto; overflow-x: hidden;
+        }
+        .sidebar h1 { font-family: 'Lora', Georgia, serif; font-size: 24px; font-weight: 500; color: var(--anthropic-dark); margin-bottom: 8px; }
+        .sidebar .subtitle { color: var(--anthropic-mid-gray); font-size: 14px; margin-bottom: 32px; line-height: 1.4; }
+        .control-section { margin-bottom: 32px; }
+        .control-section h3 { font-size: 16px; font-weight: 600; color: var(--anthropic-dark); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .control-section h3::before { content: '•'; color: var(--anthropic-orange); font-weight: bold; }
+        .seed-input {
+            width: 100%; background: var(--anthropic-light); padding: 12px; border-radius: 8px;
+            font-family: 'Courier New', monospace; font-size: 14px; margin-bottom: 12px;
+            border: 1px solid var(--anthropic-light-gray); text-align: center;
+        }
+        .seed-input:focus { outline: none; border-color: var(--anthropic-orange); box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1); background: white; }
+        .seed-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .regen-button { margin-bottom: 0; }
+        .control-group { margin-bottom: 20px; }
+        .control-group label { display: block; font-size: 14px; font-weight: 500; color: var(--anthropic-dark); margin-bottom: 8px; }
+        .control-group .hint { display: block; font-size: 11px; color: var(--anthropic-mid-gray); margin-top: 4px; line-height: 1.35; }
+        .slider-container { display: flex; align-items: center; gap: 12px; }
+        .slider-container input[type="range"] { flex: 1; height: 4px; background: var(--anthropic-light-gray); border-radius: 2px; outline: none; -webkit-appearance: none; }
+        .slider-container input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--anthropic-orange); border-radius: 50%; cursor: pointer; transition: all 0.2s ease; }
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); background: #c86641; }
+        .slider-container input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; background: var(--anthropic-orange); border-radius: 50%; border: none; cursor: pointer; }
+        .value-display { font-family: 'Courier New', monospace; font-size: 12px; color: var(--anthropic-mid-gray); min-width: 60px; text-align: right; }
+        .color-group { margin-bottom: 16px; }
+        .color-group label { display: block; font-size: 12px; color: var(--anthropic-mid-gray); margin-bottom: 4px; }
+        .color-picker-container { display: flex; align-items: center; gap: 8px; }
+        .color-picker-container input[type="color"] { width: 32px; height: 32px; border: none; border-radius: 6px; cursor: pointer; background: none; padding: 0; }
+        .color-value { font-family: 'Courier New', monospace; font-size: 12px; color: var(--anthropic-mid-gray); }
+        .button { background: var(--anthropic-orange); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; width: 100%; }
+        .button:hover { background: #c86641; transform: translateY(-1px); }
+        .button:active { transform: translateY(0); }
+        .button:focus-visible { outline: 2px solid var(--anthropic-dark); outline-offset: 2px; }
+        .button.secondary { background: var(--anthropic-blue); }
+        .button.secondary:hover { background: #5a8bb8; }
+        .button.tertiary { background: var(--anthropic-green); }
+        .button.tertiary:hover { background: #6b7b52; }
+        .button-row { display: flex; gap: 8px; }
+        .button-row .button { flex: 1; }
+        .legend { font-size: 12px; color: var(--anthropic-mid-gray); line-height: 1.5; }
+        .legend b { color: var(--anthropic-dark); font-weight: 500; }
+        .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; }
+        #canvas-container { width: 100%; max-width: 1000px; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1); background: white; }
+        #canvas-container canvas { display: block; width: 100% !important; height: auto !important; }
+        .loading { display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--anthropic-mid-gray); padding: 80px 0; }
+        @media (max-width: 600px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; }
+            .canvas-area { padding: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .button, .slider-container input[type="range"]::-webkit-slider-thumb { transition: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Settling Ground</h1>
+            <div class="subtitle">The Noesis Mindscape grammar. Threads are acts of explaining. Ground is what has settled. The sliders describe a learning history, not the art.</div>
+
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="12345" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next →</button>
+                </div>
+                <button class="button tertiary regen-button" onclick="randomSeedAndUpdate()">↻ Random</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Learning history</h3>
+
+                <div class="control-group">
+                    <label for="concepts">Concepts met</label>
+                    <div class="slider-container">
+                        <input type="range" id="concepts" min="3" max="80" step="1" value="24" oninput="updateParam('concepts', this.value)">
+                        <span class="value-display" id="concepts-value">24</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="domains">Domains</label>
+                    <div class="slider-container">
+                        <input type="range" id="domains" min="1" max="6" step="1" value="3" oninput="updateParam('domains', this.value)">
+                        <span class="value-display" id="domains-value">3</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="months">Months elapsed</label>
+                    <div class="slider-container">
+                        <input type="range" id="months" min="1" max="24" step="1" value="8" oninput="updateParam('months', this.value)">
+                        <span class="value-display" id="months-value">8</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="depth">Explanation depth</label>
+                    <div class="slider-container">
+                        <input type="range" id="depth" min="0" max="1" step="0.05" value="0.55" oninput="updateParam('depth', this.value)">
+                        <span class="value-display" id="depth-value">0.55</span>
+                    </div>
+                    <span class="hint">Hold the seed and move this. Same concepts, learned shallowly or well.</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="connectivity">Cross-domain connection</label>
+                    <div class="slider-container">
+                        <input type="range" id="connectivity" min="0" max="1" step="0.05" value="0.35" oninput="updateParam('connectivity', this.value)">
+                        <span class="value-display" id="connectivity-value">0.35</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="openQuestions">Open questions</label>
+                    <div class="slider-container">
+                        <input type="range" id="openQuestions" min="0" max="8" step="1" value="3" oninput="updateParam('openQuestions', this.value)">
+                        <span class="value-display" id="openQuestions-value">3</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="fineness">Thread weight</label>
+                    <div class="slider-container">
+                        <input type="range" id="fineness" min="0.6" max="1.8" step="0.05" value="1" oninput="updateParam('fineness', this.value)">
+                        <span class="value-display" id="fineness-value">1.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Colors</h3>
+                <div class="color-group">
+                    <label for="paper">Paper</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="paper" value="#f2ede1" onchange="updateColor('paper', this.value)">
+                        <span class="color-value" id="paper-value">#f2ede1</span>
+                    </div>
+                </div>
+                <div class="color-group">
+                    <label for="ink">Contour ink</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="ink" value="#4a4238" onchange="updateColor('ink', this.value)">
+                        <span class="color-value" id="ink-value">#4a4238</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Reading it</h3>
+                <div class="legend">
+                    <b>Spore</b> a concept only encountered.<br>
+                    <b>Threads</b> explanations, growing toward what they relate to.<br>
+                    <b>Cords and blooms</b> connections made in your own words.<br>
+                    <b>Two-tone cord</b> a bridge across domains.<br>
+                    <b>Dark stub</b> a misconception.<br>
+                    <b>Dotted reach</b> an open question.<br>
+                    <b>Contours</b> what has settled. They never fade.<br>
+                    <b>Fog</b> ground nobody has walked.
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row">
+                    <button class="button" onclick="initializeSystem()">Regenerate</button>
+                    <button class="button secondary" onclick="resetParameters()">Reset</button>
+                </div>
+                <div style="height:8px"></div>
+                <button class="button tertiary" onclick="downloadPNG()">Download PNG</button>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <div id="canvas-container">
+                <div class="loading">Growing the first season…</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // PARAMETERS. These describe a learning history, not the art.
+        // ═══════════════════════════════════════════════════════════════════
+
+        let params = {
+            seed: 12345,
+            concepts: 24,        // concepts met over the period
+            domains: 3,          // topic clusters
+            months: 8,           // time elapsed
+            depth: 0.55,         // average explanation depth, 0..1
+            connectivity: 0.35,  // probability a concept bridges domains
+            openQuestions: 3,    // questions still open
+            fineness: 1.0,       // thread weight multiplier
+            paper: '#f2ede1',
+            ink: '#4a4238'
+        };
+        let defaultParams = {...params};
+
+        // Muted domain hues: ochre, teal, rose, slate, moss, copper.
+        const DOMAIN_HUES = ['#b8863b', '#3f7f82', '#b5566a', '#5d6b8a', '#6f8a4a', '#a9603a'];
+        const SNOW = [251, 248, 240];
+        const FOG = [214, 218, 216];
+
+        const W = 1200, H = 1200, MARGIN = 150;
+        const G = 150;                       // ground grid resolution
+        const CELL = W / G;
+        const STEP = 3.6;                    // hyphal step length
+        const GOLDEN = Math.PI * (3 - Math.sqrt(5));   // 137.5°, phyllotaxis
+        const BRANCH_TURN = Math.PI - GOLDEN;          // 42.5°
+        const WEEKS_PER_FRAME = 0.2;
+        const SETTLE_WEEKS = 4;
+        const MAX_SEGMENTS = 42000;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STATE
+        // ═══════════════════════════════════════════════════════════════════
+
+        let history;            // synthetic learning history
+        let segments = [];      // every thread ever drawn; never erased
+        let tips = [];          // live hyphal tips
+        let blooms = [];        // anastomosis marks
+        let darkDots = [];      // misconception ends
+        let seekers = [];       // open questions
+        let cords = [];         // fused routes, for ground ridges
+        let simWeek = 0, t = 0, resting = false, lastGroundWeek = -99, groundDirty = false;
+        let ground, tintR, tintG, tintB, tintW, relief, groundImg, contours = [], maxH = 0;
+        let paperRGB, inkRGB, hueRGB;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SETUP
+        // ═══════════════════════════════════════════════════════════════════
+
+        function setup() {
+            const canvas = createCanvas(W, H);
+            canvas.parent('canvas-container');
+            pixelDensity(1);
+            ground = new Float32Array(G * G);
+            tintR = new Float32Array(G * G);
+            tintG = new Float32Array(G * G);
+            tintB = new Float32Array(G * G);
+            tintW = new Float32Array(G * G);
+            relief = new Float32Array(G * G);
+            groundImg = createImage(G, G);
+            initializeSystem();
+            document.querySelector('.loading').style.display = 'none';
+        }
+
+        function hexToRGB(h) {
+            return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+        }
+        function mixRGB(a, b, k) {
+            return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+        }
+        function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+
+        function initializeSystem() {
+            randomSeed(params.seed);
+            noiseSeed(params.seed);
+            paperRGB = hexToRGB(params.paper);
+            inkRGB = hexToRGB(params.ink);
+            hueRGB = DOMAIN_HUES.map(hexToRGB);
+
+            segments = []; tips = []; blooms = []; darkDots = []; seekers = []; cords = [];
+            simWeek = 0; t = 0; resting = false; lastGroundWeek = -99; groundDirty = false;
+            contours = []; maxH = 0;
+
+            // Low relief so flat ground has the grain of land. Stays below the first contour.
+            for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) {
+                const n = noise(gx * 0.045, gy * 0.045) * 0.6 + noise(gx * 0.12, gy * 0.12) * 0.4;
+                relief[gy * G + gx] = n;
+            }
+
+            history = generateHistory();
+            computeGround();
+            frameRate(30);
+            loop();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SYNTHETIC LEARNING HISTORY
+        // In the app this function is replaced by a query over concepts,
+        // explain_backs, concept_relations, recall_attempts, curiosity_items.
+        // ═══════════════════════════════════════════════════════════════════
+
+        function generateHistory() {
+            const weeks = max(3, round(params.months * 4.35));
+            const k = params.domains;
+
+            // Domain centers, spaced apart. Hues shuffled per seed.
+            const hueOrder = [0, 1, 2, 3, 4, 5];
+            for (let i = hueOrder.length - 1; i > 0; i--) {
+                const j = floor(random(i + 1));
+                [hueOrder[i], hueOrder[j]] = [hueOrder[j], hueOrder[i]];
+            }
+            const domains = [];
+            const spacing = k <= 1 ? 0 : constrain(920 / k, 230, 430);
+            for (let d = 0; d < k; d++) {
+                let best = null, bestD = -1;
+                for (let tries = 0; tries < 90; tries++) {
+                    const x = random(MARGIN + 80, W - MARGIN - 80);
+                    const y = random(MARGIN + 80, H - MARGIN - 80);
+                    let md = Infinity;
+                    for (const o of domains) md = min(md, dist(x, y, o.x, o.y));
+                    if (md >= spacing) { best = {x, y}; break; }
+                    if (md > bestD) { bestD = md; best = {x, y}; }
+                }
+                domains.push({x: best.x, y: best.y, hue: hueOrder[d % 6]});
+            }
+
+            // Concepts appear across the timeline.
+            const N = params.concepts;
+            const births = [];
+            for (let i = 0; i < N; i++) births.push(floor(random(weeks * 0.9)));
+            births.sort((a, b) => a - b);
+
+            const concepts = [];
+            const sigma = 62 + 13 * sqrt(N / k);
+            for (let i = 0; i < N; i++) {
+                const d = floor(random(k));
+                const dom = domains[d];
+                let x = dom.x, y = dom.y;
+                for (let tries = 0; tries < 40; tries++) {
+                    x = constrain(dom.x + randomGaussian() * sigma, MARGIN, W - MARGIN);
+                    y = constrain(dom.y + randomGaussian() * sigma, MARGIN, H - MARGIN);
+                    let ok = true;
+                    for (const c of concepts) if (dist(x, y, c.x, c.y) < 34) { ok = false; break; }
+                    if (ok) break;
+                }
+                const week0 = births[i];
+
+                // Some concepts are only ever encountered. Shallow learners leave more spores.
+                const germinates = random() > (0.3 * (1 - params.depth) + 0.08);
+                const explains = [];
+                if (germinates) {
+                    const n = 1 + floor(random() * (0.7 + params.depth * 3.2));
+                    let wk = week0;
+                    for (let e = 0; e < n; e++) {
+                        wk += e === 0 ? floor(random(0, 2)) : 1 + floor(random(1, 7));
+                        if (wk > weeks) break;
+                        const depth = constrain(params.depth + randomGaussian() * 0.22, 0.05, 1);
+                        explains.push({week: wk, depth, released: false});
+                    }
+                }
+
+                // Retention: held after time passed, most likely with repeated or deep explanation.
+                let retainWeek = null;
+                if (explains.length) {
+                    const strength = explains.reduce((s, e) => s + e.depth, 0);
+                    const last = explains[explains.length - 1].week;
+                    if ((explains.length >= 2 || strength > 0.8) && random() < 0.85) {
+                        retainWeek = last + 4 + floor(random(0, 5));
+                    }
+                }
+
+                concepts.push({
+                    i, d, x, y, hue: dom.hue, week0, explains, retainWeek,
+                    related: [], settleT: 0, fused: 0,
+                    misconception: germinates && random() < 0.09,
+                    question: false,
+                    baseAngle: random(TWO_PI), grain: random(1000),
+                    rSum: 0, rN: 0, sigma: 40
+                });
+            }
+
+            // Relations. Same-domain neighbours always; cross-domain by connectivity.
+            for (const c of concepts) {
+                const earlier = concepts.filter(o => o.i !== c.i && o.week0 <= c.week0);
+                const byDist = (a, b) => dist(a.x, a.y, c.x, c.y) - dist(b.x, b.y, c.x, c.y);
+                const same = earlier.filter(o => o.d === c.d).sort(byDist);
+                if (same[0]) c.related.push({j: same[0].i, cross: false, user: random() < 0.8, fused: false, launched: false});
+                if (same[1] && random() < 0.5) c.related.push({j: same[1].i, cross: false, user: random() < 0.6, fused: false, launched: false});
+                if (k > 1 && random() < params.connectivity) {
+                    const other = earlier.filter(o => o.d !== c.d).sort(byDist);
+                    if (other[0]) c.related.push({j: other[0].i, cross: true, user: random() < 0.75, fused: false, launched: false});
+                }
+            }
+
+            // Open questions belong to concepts that were actually explained.
+            const explained = concepts.filter(c => c.explains.length);
+            for (let i = explained.length - 1; i > 0; i--) {
+                const j = floor(random(i + 1));
+                [explained[i], explained[j]] = [explained[j], explained[i]];
+            }
+            for (let q = 0; q < min(params.openQuestions, explained.length); q++) explained[q].question = true;
+
+            return {weeks, domains, concepts};
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SIMULATION. Time-lapse from the first week to the present.
+        // ═══════════════════════════════════════════════════════════════════
+
+        function draw() {
+            t++;
+            const timelineRunning = simWeek < history.weeks;
+            if (timelineRunning || tips.length) {
+                if (timelineRunning) simWeek = min(history.weeks, simWeek + WEEKS_PER_FRAME);
+                releaseExplanations();
+                updateSettling();
+                stepTips(3);
+                if (groundDirty && simWeek - lastGroundWeek >= 1.5) {
+                    computeGround(); lastGroundWeek = simWeek; groundDirty = false;
+                }
+            } else if (!resting) {
+                resting = true;
+                updateSettling();
+                computeGround();
+                frameRate(12);
+            }
+            stepSeekers();
+            render();
+        }
+
+        function releaseExplanations() {
+            for (const c of history.concepts) {
+                // A concept met and never explained: a single short curl, and nothing else.
+                if (!c.explains.length && !c.spored && c.week0 <= simWeek) {
+                    c.spored = true;
+                    let x = c.x, y = c.y, dir = c.baseAngle;
+                    for (let i = 0; i < 4; i++) {
+                        dir += 0.5;
+                        const nx = x + cos(dir) * 2.6, ny = y + sin(dir) * 2.6;
+                        segments.push({ax: x, ay: y, bx: nx, by: ny, w: 0.8, c: c.i, gen: 3, dark: false, cord: false, mix: -1, week: simWeek});
+                        x = nx; y = ny;
+                    }
+                }
+                for (let k = 0; k < c.explains.length; k++) {
+                    const e = c.explains[k];
+                    if (!e.released && e.week <= simWeek) { e.released = true; spawnGrowth(c, e, k); }
+                }
+            }
+        }
+
+        function spawnGrowth(c, e, k) {
+            const depth = e.depth;
+            const overBudget = segments.length > MAX_SEGMENTS;
+
+            if (k > 0) {
+                // Re-explaining thickens what is already there before it extends. Depth outgrows breadth.
+                for (const s of segments) {
+                    if (s.c === c.i && s.gen <= 1 && !s.dark) s.w = min(s.w + 0.4, 2.6);
+                }
+            }
+
+            if (!overBudget) {
+                const nFree = k === 0 ? 2 + floor(depth * 4) : 1 + floor(depth * 2);
+                for (let i = 0; i < nFree; i++) {
+                    tips.push({
+                        x: c.x, y: c.y, dir: c.baseAngle + (k * 3 + i) * GOLDEN + random(-0.25, 0.25),
+                        c: c.i, gen: 0, life: floor(12 + depth * 44 * random(0.6, 1.4)),
+                        target: null, rel: null, grain: c.grain, pathSegs: []
+                    });
+                }
+            }
+
+            // Toward what it relates to. Only user-made connections get to fuse.
+            for (const r of c.related) {
+                if (r.fused || r.launched) continue;
+                const o = history.concepts[r.j];
+                if (o.week0 > simWeek) continue;
+                r.launched = true;
+                const dd = dist(c.x, c.y, o.x, o.y);
+                tips.push({
+                    x: c.x, y: c.y, dir: atan2(o.y - c.y, o.x - c.x) + random(-0.7, 0.7),
+                    c: c.i, gen: 0, life: floor(dd / STEP * (r.user ? 1.6 : 0.7) + 14),
+                    target: o, rel: r, grain: c.grain, pathSegs: []
+                });
+            }
+
+            if (c.misconception && k === 0) {
+                tips.push({x: c.x, y: c.y, dir: random(TWO_PI), c: c.i, gen: 2, life: 9 + floor(random(6)),
+                           target: null, rel: null, grain: c.grain, pathSegs: [], dark: true});
+            }
+
+            if (c.question && k === c.explains.length - 1) {
+                const dom = history.domains[c.d];
+                const away = atan2(c.y - dom.y, c.x - dom.x) + random(-0.5, 0.5);
+                seekers.push({x: c.x, y: c.y, dir: away, c: c.i, pts: [{x: c.x, y: c.y}], grain: c.grain + 17});
+            }
+        }
+
+        function lerpAngle(a, b, k) {
+            let d = b - a;
+            while (d > PI) d -= TWO_PI;
+            while (d < -PI) d += TWO_PI;
+            return a + d * k;
+        }
+
+        function stepTips(substeps) {
+            for (let s = 0; s < substeps; s++) {
+                for (let i = tips.length - 1; i >= 0; i--) {
+                    const tip = tips[i];
+                    const c = history.concepts[tip.c];
+                    const wander = (noise(tip.x * 0.006 + tip.grain, tip.y * 0.006, tip.grain * 0.37) - 0.5) * 0.9;
+                    let dir = tip.dir + wander + random(-0.1, 0.1);
+
+                    if (tip.target) {
+                        const dx = tip.target.x - tip.x, dy = tip.target.y - tip.y;
+                        const dd = sqrt(dx * dx + dy * dy);
+                        const pull = 0.1 + 0.4 * max(0, 1 - dd / 320);
+                        dir = lerpAngle(dir, atan2(dy, dx), pull);
+                        if (dd < 12) {
+                            if (tip.rel.user) fuse(tip);
+                            tips.splice(i, 1);
+                            continue;
+                        }
+                    }
+
+                    const nx = tip.x + cos(dir) * STEP, ny = tip.y + sin(dir) * STEP;
+                    if (nx < 24 || ny < 24 || nx > W - 24 || ny > H - 24) { tips.splice(i, 1); continue; }
+
+                    const w = tip.dark ? 1.15 : max(0.42, 1.0 - tip.gen * 0.17);
+                    segments.push({ax: tip.x, ay: tip.y, bx: nx, by: ny, w, c: tip.c, gen: tip.gen,
+                                   dark: !!tip.dark, cord: false, mix: -1, week: simWeek});
+                    tip.pathSegs.push(segments.length - 1);
+                    tip.x = nx; tip.y = ny; tip.dir = dir; tip.life--;
+
+                    if (!tip.target) {
+                        const r = dist(nx, ny, c.x, c.y);
+                        c.rSum += r; c.rN++;
+                    }
+
+                    if (tip.life <= 0) {
+                        if (tip.dark) darkDots.push({x: nx, y: ny});
+                        tips.splice(i, 1);
+                        continue;
+                    }
+
+                    if (!tip.dark && !tip.target && tip.gen < 4 && tips.length < 700 && segments.length < MAX_SEGMENTS
+                        && random() < 0.05 * pow(0.62, tip.gen)) {
+                        const side = random() < 0.5 ? 1 : -1;
+                        tips.push({x: nx, y: ny, dir: dir + side * BRANCH_TURN, c: tip.c, gen: tip.gen + 1,
+                                   life: floor(tip.life * 0.65), target: null, rel: null, grain: tip.grain, pathSegs: []});
+                    }
+                }
+            }
+        }
+
+        // Anastomosis: the thread that reached its relation becomes a cord.
+        function fuse(tip) {
+            const c = history.concepts[tip.c], o = tip.target, r = tip.rel;
+            r.fused = true; c.fused++; o.fused++;
+            for (const si of tip.pathSegs) {
+                const s = segments[si];
+                s.w = min(s.w * 2.1 + 0.5, 3.3);
+                s.cord = true;
+                if (r.cross) s.mix = o.hue;
+            }
+            segments.push({ax: tip.x, ay: tip.y, bx: o.x, by: o.y, w: 2.2, c: c.i, gen: 0,
+                           dark: false, cord: true, mix: r.cross ? o.hue : -1, week: simWeek});
+            blooms.push({x: tip.x, y: tip.y, hueA: c.hue, hueB: o.hue, cross: r.cross, week: simWeek, seed: random(1000)});
+            cords.push({a: c, b: o, cross: r.cross, path: tip.pathSegs.slice()});
+        }
+
+        function updateSettling() {
+            for (const c of history.concepts) {
+                if (c.retainWeek === null) continue;
+                const nt = constrain((simWeek - c.retainWeek) / SETTLE_WEEKS, 0, 1);
+                if (nt !== c.settleT) {
+                    c.settleT = nt;
+                    c.sigma = constrain(c.rN ? c.rSum / c.rN * 0.95 : 40, 34, 165);
+                    groundDirty = true;
+                }
+            }
+        }
+
+        function stepSeekers() {
+            if (t % 5 !== 0) return;
+            for (const q of seekers) {
+                if (q.pts.length > 420) continue;
+                const wander = (noise(q.x * 0.01 + q.grain, q.y * 0.01, t * 0.002) - 0.5) * 0.7;
+                q.dir += wander;
+                q.x += cos(q.dir) * 1.6; q.y += sin(q.dir) * 1.6;
+                if (q.x < 30 || q.y < 30 || q.x > W - 30 || q.y > H - 30) { q.dir += PI; continue; }
+                q.pts.push({x: q.x, y: q.y});
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GROUND. A heightfield that is only ever added to.
+        // ═══════════════════════════════════════════════════════════════════
+
+        function conceptHeight(c) {
+            return min(1.1, 0.3 + 0.16 * c.explains.length + 0.12 * c.fused);
+        }
+
+        function computeGround() {
+            ground.fill(0); tintR.fill(0); tintG.fill(0); tintB.fill(0); tintW.fill(0);
+
+            for (const c of history.concepts) {
+                if (c.settleT <= 0) continue;
+                const h = conceptHeight(c) * c.settleT;
+                const sg = c.sigma / CELL, cx = c.x / CELL - 0.5, cy = c.y / CELL - 0.5;
+                const inv = 1 / (2 * sg * sg);
+                const rr = ceil(sg * 3);
+                const hue = hueRGB[c.hue];
+                for (let gy = max(0, floor(cy - rr)); gy <= min(G - 1, ceil(cy + rr)); gy++) {
+                    for (let gx = max(0, floor(cx - rr)); gx <= min(G - 1, ceil(cx + rr)); gx++) {
+                        const dx = gx - cx, dy = gy - cy;
+                        const g = h * Math.exp(-(dx * dx + dy * dy) * inv);
+                        if (g < 0.002) continue;
+                        const idx = gy * G + gx;
+                        ground[idx] += g;
+                        tintR[idx] += hue[0] * g; tintG[idx] += hue[1] * g; tintB[idx] += hue[2] * g; tintW[idx] += g;
+                    }
+                }
+            }
+
+            // Settled cords become ridges; settled bridges become passes between ranges.
+            for (const cd of cords) {
+                const st = min(cd.a.settleT, cd.b.settleT);
+                if (st <= 0) continue;
+                const hh = (cd.cross ? 0.62 : 0.4) * min(conceptHeight(cd.a), conceptHeight(cd.b)) * st;
+                const sg = (cd.cross ? 30 : 22) / CELL, inv = 1 / (2 * sg * sg), rr = ceil(sg * 3);
+                const hue = mixRGB(hueRGB[cd.a.hue], hueRGB[cd.b.hue], 0.5);
+                // sample the actual route the thread took
+                const pts = [];
+                for (let i = 0; i < cd.path.length; i += 4) { const s = segments[cd.path[i]]; pts.push([s.ax / CELL - 0.5, s.ay / CELL - 0.5]); }
+                pts.push([cd.b.x / CELL - 0.5, cd.b.y / CELL - 0.5]);
+                for (const [px, py] of pts) {
+                    for (let gy = max(0, floor(py - rr)); gy <= min(G - 1, ceil(py + rr)); gy++) {
+                        for (let gx = max(0, floor(px - rr)); gx <= min(G - 1, ceil(px + rr)); gx++) {
+                            const dx = gx - px, dy = gy - py;
+                            const g = hh * Math.exp(-(dx * dx + dy * dy) * inv);
+                            if (g < 0.002) continue;
+                            const idx = gy * G + gx;
+                            // ridges take the max along the route so overlapping samples don't stack
+                            ground[idx] = max(ground[idx], g);
+                            tintR[idx] += hue[0] * g * 0.3; tintG[idx] += hue[1] * g * 0.3; tintB[idx] += hue[2] * g * 0.3; tintW[idx] += g * 0.3;
+                        }
+                    }
+                }
+            }
+
+            maxH = 0;
+            for (let i = 0; i < G * G; i++) {
+                ground[i] += relief[i] * 0.055;
+                if (ground[i] > maxH) maxH = ground[i];
+            }
+
+            contours = [];
+            const interval = 0.07;
+            let li = 0;
+            for (let level = 0.1; level <= maxH; level += interval, li++) {
+                const segs = marchingSquares(ground, level);
+                if (segs.length) contours.push({level, index: li % 4 === 0, segs});
+            }
+        }
+
+        function marchingSquares(field, l) {
+            const out = [];
+            const px = (gx, f) => (gx + 0.5 + f) * CELL;
+            const py = (gy, f) => (gy + 0.5 + f) * CELL;
+            for (let gy = 0; gy < G - 1; gy++) {
+                for (let gx = 0; gx < G - 1; gx++) {
+                    const v0 = field[gy * G + gx], v1 = field[gy * G + gx + 1];
+                    const v2 = field[(gy + 1) * G + gx + 1], v3 = field[(gy + 1) * G + gx];
+                    const idx = (v0 > l ? 8 : 0) | (v1 > l ? 4 : 0) | (v2 > l ? 2 : 0) | (v3 > l ? 1 : 0);
+                    if (idx === 0 || idx === 15) continue;
+                    const T = [px(gx, (l - v0) / (v1 - v0)), py(gy, 0)];
+                    const R = [px(gx, 1), py(gy, (l - v1) / (v2 - v1))];
+                    const B = [px(gx, (l - v3) / (v2 - v3)), py(gy, 1)];
+                    const L = [px(gx, 0), py(gy, (l - v0) / (v3 - v0))];
+                    switch (idx) {
+                        case 1: case 14: out.push(L, B); break;
+                        case 2: case 13: out.push(B, R); break;
+                        case 3: case 12: out.push(L, R); break;
+                        case 4: case 11: out.push(T, R); break;
+                        case 5: out.push(L, T, B, R); break;
+                        case 6: case 9: out.push(T, B); break;
+                        case 7: case 8: out.push(L, T); break;
+                        case 10: out.push(T, R, L, B); break;
+                    }
+                }
+            }
+            return out;
+        }
+
+        function updateGroundImage() {
+            groundImg.loadPixels();
+            const p = groundImg.pixels;
+            const drift = t * 0.004;
+            for (let gy = 0; gy < G; gy++) {
+                for (let gx = 0; gx < G; gx++) {
+                    const i = gy * G + gx;
+                    const h = ground[i];
+                    let r = paperRGB[0], g = paperRGB[1], b = paperRGB[2];
+                    if (tintW[i] > 0) {
+                        const k = min(0.42, h * 0.55);
+                        const tw = tintW[i];
+                        r += (tintR[i] / tw - r) * k; g += (tintG[i] / tw - g) * k; b += (tintB[i] / tw - b) * k;
+                    }
+                    if (h > 0.82) {
+                        const k = min(1, (h - 0.82) / 0.3) * 0.85;
+                        r += (SNOW[0] - r) * k; g += (SNOW[1] - g) * k; b += (SNOW[2] - b) * k;
+                    }
+                    if (h < 0.14) {
+                        const f = (0.14 - h) / 0.14;
+                        const n = noise(gx * 0.055 + drift, gy * 0.055, drift * 0.6);
+                        const k = f * (0.12 + 0.5 * n);
+                        r += (FOG[0] - r) * k; g += (FOG[1] - g) * k; b += (FOG[2] - b) * k;
+                    }
+                    const grain = (relief[i] - 0.5) * 9;
+                    const o = i * 4;
+                    p[o] = r + grain; p[o + 1] = g + grain; p[o + 2] = b + grain; p[o + 3] = 255;
+                }
+            }
+            groundImg.updatePixels();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // RENDER
+        // ═══════════════════════════════════════════════════════════════════
+
+        function render() {
+            const ctx = drawingContext;
+            background(paperRGB[0], paperRGB[1], paperRGB[2]);
+            if (t % 2 === 1 || t === 1) updateGroundImage();
+            image(groundImg, 0, 0, W, H);
+
+            // Contours
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            for (const cl of contours) {
+                ctx.beginPath();
+                for (let i = 0; i < cl.segs.length; i += 2) {
+                    ctx.moveTo(cl.segs[i][0], cl.segs[i][1]);
+                    ctx.lineTo(cl.segs[i + 1][0], cl.segs[i + 1][1]);
+                }
+                ctx.strokeStyle = rgba(inkRGB, cl.index ? 0.62 : 0.4);
+                ctx.lineWidth = cl.index ? 1.25 : 0.8;
+                ctx.stroke();
+            }
+
+            // Threads, bucketed by style so each bucket is one stroke call
+            const buckets = new Map();
+            for (const s of segments) {
+                const key = s.c * 4096 + (round(s.w * 4) << 3) + (s.dark ? 4 : 0) + (s.cord ? 2 : 0) + (s.mix >= 0 ? 1 : 0);
+                let b = buckets.get(key);
+                if (!b) { b = {c: s.c, w: s.w, dark: s.dark, cord: s.cord, mix: s.mix, segs: []}; buckets.set(key, b); }
+                b.segs.push(s);
+            }
+            const ordered = [...buckets.values()].sort((a, b) => (a.cord - b.cord) || (a.dark - b.dark));
+            for (const b of ordered) {
+                const c = history.concepts[b.c];
+                let col, alpha;
+                if (b.dark) { col = inkRGB; alpha = 0.85; }
+                else {
+                    col = hueRGB[c.hue];
+                    if (b.mix >= 0) col = mixRGB(col, hueRGB[b.mix], 0.5);
+                    // Settling: the thread sinks toward the paper as the ground rises beneath it.
+                    col = mixRGB(col, paperRGB, 0.6 * c.settleT);
+                    alpha = (b.cord ? 0.92 : 0.8) - 0.55 * c.settleT;
+                }
+                ctx.beginPath();
+                for (const s of b.segs) { ctx.moveTo(s.ax, s.ay); ctx.lineTo(s.bx, s.by); }
+                ctx.strokeStyle = rgba(col, alpha);
+                ctx.lineWidth = b.w * params.fineness;
+                ctx.stroke();
+            }
+
+            // Misconception ends
+            ctx.fillStyle = rgba(inkRGB, 0.85);
+            for (const d of darkDots) { ctx.beginPath(); ctx.arc(d.x, d.y, 2.1, 0, TWO_PI); ctx.fill(); }
+
+            // Blooms: marks of connection. They keep their ink.
+            for (const bl of blooms) {
+                const age = simWeek - bl.week;
+                const a = 0.9 - 0.5 * constrain(age / 6, 0, 1);
+                const n = bl.cross ? 18 : 10, len = bl.cross ? 22 : 11;
+                ctx.lineWidth = 0.9 * params.fineness;
+                for (let i = 0; i < n; i++) {
+                    const ang = i * TWO_PI / n + bl.seed;
+                    const L = len * (0.55 + 0.45 * noise(bl.seed + i * 0.7));
+                    const hue = (bl.cross && i % 2) ? hueRGB[bl.hueB] : hueRGB[bl.hueA];
+                    ctx.strokeStyle = rgba(hue, a);
+                    ctx.beginPath();
+                    ctx.moveTo(bl.x + cos(ang) * 3, bl.y + sin(ang) * 3);
+                    ctx.lineTo(bl.x + cos(ang) * L, bl.y + sin(ang) * L);
+                    ctx.stroke();
+                }
+                if (bl.cross) {
+                    ctx.strokeStyle = rgba(mixRGB(hueRGB[bl.hueA], hueRGB[bl.hueB], 0.5), a * 0.5);
+                    ctx.lineWidth = 0.8;
+                    ctx.beginPath(); ctx.arc(bl.x, bl.y, 15, 0, TWO_PI); ctx.stroke();
+                }
+            }
+
+            // Open questions: a dotted reach into the fog, still growing.
+            for (const q of seekers) {
+                const hue = hueRGB[history.concepts[q.c].hue];
+                ctx.strokeStyle = rgba(hue, 0.55);
+                ctx.lineWidth = 0.8 * params.fineness;
+                ctx.beginPath();
+                for (let i = 1; i < q.pts.length; i += 2) {
+                    ctx.moveTo(q.pts[i - 1].x, q.pts[i - 1].y);
+                    ctx.lineTo(q.pts[i].x, q.pts[i].y);
+                }
+                ctx.stroke();
+                const end = q.pts[q.pts.length - 1];
+                const pulse = 3.5 + 1.2 * sin(t * 0.05 + q.grain);
+                ctx.beginPath(); ctx.arc(end.x, end.y, pulse, 0, TWO_PI); ctx.stroke();
+            }
+
+            // Live tips are the only luminous thing.
+            for (const tip of tips) {
+                if (tip.dark) continue;
+                const hue = hueRGB[history.concepts[tip.c].hue];
+                ctx.fillStyle = rgba(hue, 0.12);
+                ctx.beginPath(); ctx.arc(tip.x, tip.y, 6.5, 0, TWO_PI); ctx.fill();
+                ctx.fillStyle = rgba(hue, 0.6);
+                ctx.beginPath(); ctx.arc(tip.x, tip.y, 1.8, 0, TWO_PI); ctx.fill();
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // UI
+        // ═══════════════════════════════════════════════════════════════════
+
+        const FLOAT_PARAMS = new Set(['depth', 'connectivity', 'fineness']);
+
+        function displayValue(name, v) {
+            if (name === 'fineness') return Number(v).toFixed(2);
+            if (FLOAT_PARAMS.has(name)) return Number(v).toFixed(2);
+            return String(v);
+        }
+
+        function updateParam(name, value) {
+            params[name] = FLOAT_PARAMS.has(name) ? parseFloat(value) : parseInt(value);
+            document.getElementById(name + '-value').textContent = displayValue(name, params[name]);
+            initializeSystem();
+        }
+
+        function updateColor(id, value) {
+            params[id] = value;
+            document.getElementById(id + '-value').textContent = value;
+            paperRGB = hexToRGB(params.paper);
+            inkRGB = hexToRGB(params.ink);
+            loop();
+        }
+
+        function downloadPNG() {
+            saveCanvas('settling-ground-' + params.seed, 'png');
+        }
+
+        function updateSeedDisplay() {
+            document.getElementById('seed-input').value = params.seed;
+        }
+
+        function updateSeed() {
+            const input = document.getElementById('seed-input');
+            const newSeed = parseInt(input.value);
+            if (newSeed && newSeed > 0) { params.seed = newSeed; initializeSystem(); }
+            else updateSeedDisplay();
+        }
+
+        function previousSeed() { params.seed = Math.max(1, params.seed - 1); updateSeedDisplay(); initializeSystem(); }
+        function nextSeed() { params.seed = params.seed + 1; updateSeedDisplay(); initializeSystem(); }
+        function randomSeedAndUpdate() { params.seed = Math.floor(Math.random() * 999999) + 1; updateSeedDisplay(); initializeSystem(); }
+
+        function resetParameters() {
+            params = {...defaultParams};
+            for (const name of ['concepts', 'domains', 'months', 'depth', 'connectivity', 'openQuestions', 'fineness']) {
+                document.getElementById(name).value = params[name];
+                document.getElementById(name + '-value').textContent = displayValue(name, params[name]);
+            }
+            for (const id of ['paper', 'ink']) {
+                document.getElementById(id).value = params[id];
+                document.getElementById(id + '-value').textContent = params[id];
+            }
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        window.addEventListener('load', updateSeedDisplay);
+    </script>
+</body>
+</html>

@@ -27,14 +27,14 @@ export function DeleteSessionButton({
         title="Delete"
         className={
           className ??
-          "flex h-6 w-6 items-center justify-center text-zinc-400 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400"
+          "flex h-7 w-7 items-center justify-center text-ink-soft transition-colors hover:text-rose"
         }
       >
         <svg
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth={1.5}
+          strokeWidth={1.25}
           strokeLinecap="round"
           strokeLinejoin="round"
           className="h-4 w-4"

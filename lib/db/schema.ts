@@ -369,3 +369,39 @@ export const curriculumAttempts = sqliteTable("curriculum_attempts", {
 });
 
 export type CurriculumAttempt = typeof curriculumAttempts.$inferSelect;
+
+// --- WeeklyFocus ------------------------------------------------------------
+// The one thing chosen for a given week. Deliberately no "missed" state: a
+// week with no row is simply a week with nothing chosen. weekStart is an ISO
+// date (YYYY-MM-DD) for the Monday of that week.
+
+export const weeklyFocus = sqliteTable("weekly_focus", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => learningSessions.id, { onDelete: "cascade" }),
+  weekStart: text("week_start").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(current_timestamp)`),
+});
+
+// --- ExplainBackRelation (join) ---------------------------------------------
+// Which relations an explain-back created or strengthened, so the Reflect
+// view can say exactly what the map did because of this explanation.
+
+export const explainBackRelationKindValues = ["new", "strengthened"] as const;
+export type ExplainBackRelationKind =
+  (typeof explainBackRelationKindValues)[number];
+
+export const explainBackRelations = sqliteTable("explain_back_relations", {
+  explainBackId: text("explain_back_id")
+    .notNull()
+    .references(() => explainBacks.id, { onDelete: "cascade" }),
+  relationId: text("relation_id")
+    .notNull()
+    .references(() => conceptRelations.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<ExplainBackRelationKind>().notNull(),
+});

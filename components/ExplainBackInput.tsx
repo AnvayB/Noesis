@@ -89,19 +89,15 @@ export function ExplainBackInput() {
         rows={8}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={supported ? "Type, or record instead" : undefined}
-        className="rounded-lg border border-black/[.08] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-white/[.1] dark:bg-zinc-950 dark:text-zinc-100"
+        placeholder={supported ? "Start anywhere. Type, or record instead." : "Start anywhere."}
+        className="writing"
       />
       <input type="hidden" name="inputMode" value={usedVoice ? "voice" : "text"} />
       {supported && (
         <button
           type="button"
           onClick={isListening ? stopListening : startListening}
-          className={
-            isListening
-              ? "w-fit rounded-full bg-red-500/10 px-3 py-1.5 text-xs text-red-600 dark:text-red-400"
-              : "w-fit rounded-full bg-black/[.06] px-3 py-1.5 text-xs text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
-          }
+          className={isListening ? "btn btn-line btn-sm w-fit text-rose" : "btn btn-line btn-sm w-fit"}
         >
           {isListening ? "Stop recording" : "Record instead"}
         </button>

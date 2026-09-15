@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three Weathers</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+        .container { display: flex; min-height: 100vh; padding: 20px; gap: 20px; }
+        .sidebar {
+            width: 320px; flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto; overflow-x: hidden;
+        }
+        .sidebar h1 { font-family: 'Lora', Georgia, serif; font-size: 24px; font-weight: 500; color: var(--anthropic-dark); margin-bottom: 8px; }
+        .sidebar .subtitle { color: var(--anthropic-mid-gray); font-size: 14px; margin-bottom: 32px; line-height: 1.4; }
+        .control-section { margin-bottom: 32px; }
+        .control-section h3 { font-size: 16px; font-weight: 600; color: var(--anthropic-dark); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .control-section h3::before { content: '•'; color: var(--anthropic-orange); font-weight: bold; }
+        .seed-input {
+            width: 100%; background: var(--anthropic-light); padding: 12px; border-radius: 8px;
+            font-family: 'Courier New', monospace; font-size: 14px; margin-bottom: 12px;
+            border: 1px solid var(--anthropic-light-gray); text-align: center;
+        }
+        .seed-input:focus { outline: none; border-color: var(--anthropic-orange); box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1); background: white; }
+        .seed-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .regen-button { margin-bottom: 0; }
+        .control-group { margin-bottom: 20px; }
+        .control-group label { display: block; font-size: 14px; font-weight: 500; color: var(--anthropic-dark); margin-bottom: 8px; }
+        .control-group .hint { display: block; font-size: 11px; color: var(--anthropic-mid-gray); margin-top: 4px; line-height: 1.35; }
+        .slider-container { display: flex; align-items: center; gap: 12px; }
+        .slider-container input[type="range"] { flex: 1; height: 4px; background: var(--anthropic-light-gray); border-radius: 2px; outline: none; -webkit-appearance: none; }
+        .slider-container input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--anthropic-orange); border-radius: 50%; cursor: pointer; transition: all 0.2s ease; }
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); background: #c86641; }
+        .slider-container input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; background: var(--anthropic-orange); border-radius: 50%; border: none; cursor: pointer; }
+        .value-display { font-family: 'Courier New', monospace; font-size: 12px; color: var(--anthropic-mid-gray); min-width: 60px; text-align: right; }
+        .button { background: var(--anthropic-orange); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; width: 100%; }
+        .button:hover { background: #c86641; transform: translateY(-1px); }
+        .button:active { transform: translateY(0); }
+        .button:focus-visible { outline: 2px solid var(--anthropic-dark); outline-offset: 2px; }
+        .button.secondary { background: var(--anthropic-blue); }
+        .button.secondary:hover { background: #5a8bb8; }
+        .button.tertiary { background: var(--anthropic-green); }
+        .button.tertiary:hover { background: #6b7b52; }
+        .button-row { display: flex; gap: 8px; }
+        .button-row .button { flex: 1; }
+        .theme-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .theme-row .button { background: var(--anthropic-light); color: var(--anthropic-dark); border: 1px solid var(--anthropic-light-gray); }
+        .theme-row .button:hover { background: white; }
+        .theme-row .button.active { background: var(--anthropic-dark); color: white; border-color: var(--anthropic-dark); }
+        .legend { font-size: 12px; color: var(--anthropic-mid-gray); line-height: 1.5; }
+        .legend b { color: var(--anthropic-dark); font-weight: 500; }
+        .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; }
+        #canvas-container { width: 100%; max-width: 1000px; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1); background: white; }
+        #canvas-container canvas { display: block; width: 100% !important; height: auto !important; }
+        .loading { display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--anthropic-mid-gray); padding: 80px 0; }
+        @media (max-width: 600px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; }
+            .canvas-area { padding: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .button, .slider-container input[type="range"]::-webkit-slider-thumb { transition: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Three Weathers</h1>
+            <div class="subtitle">One twelve-month learning history, three environments. The seed is the person. The month is the knowledge state. Positions never move.</div>
+
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="12345" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next →</button>
+                </div>
+                <button class="button tertiary regen-button" onclick="randomSeedAndUpdate()">↻ Random</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Environment</h3>
+                <div class="theme-row">
+                    <button class="button active" id="theme-grove" onclick="setTheme('grove')">Grove</button>
+                    <button class="button" id="theme-sky" onclick="setTheme('sky')">Sky</button>
+                    <button class="button" id="theme-ground" onclick="setTheme('ground')">Ground</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Knowledge state</h3>
+                <div class="control-group">
+                    <label for="month">Month</label>
+                    <div class="slider-container">
+                        <input type="range" id="month" min="1" max="12" step="1" value="12" oninput="updateParam('month', this.value)">
+                        <span class="value-display" id="month-value">12</span>
+                    </div>
+                    <span class="hint">Scrub it. Everything already drawn stays where it was.</span>
+                </div>
+                <div class="control-group">
+                    <label for="variation">Organic variation</label>
+                    <div class="slider-container">
+                        <input type="range" id="variation" min="0" max="1" step="0.05" value="0.6" oninput="updateParam('variation', this.value)">
+                        <span class="value-display" id="variation-value">0.60</span>
+                    </div>
+                    <span class="hint">Scales the noise, never the structure. At zero the map is a diagram.</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Reading it</h3>
+                <div class="legend" id="legend"></div>
+            </div>
+
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row">
+                    <button class="button" onclick="rerender()">Regenerate</button>
+                    <button class="button secondary" onclick="resetParameters()">Reset</button>
+                </div>
+                <div style="height:8px"></div>
+                <button class="button tertiary" onclick="downloadPNG()">Download PNG</button>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <div id="canvas-container">
+                <div class="loading">Reading twelve months of learning…</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // PARAMETERS
+        // ═══════════════════════════════════════════════════════════════════
+
+        let params = { seed: 12345, theme: 'grove', month: 12, variation: 0.6 };
+        let defaultParams = {...params};
+
+        const W = 1200, H = 1200;
+        const PAPER = [242, 237, 225], INK = [74, 66, 56], BARK = [92, 76, 60];
+        const NIGHT_TOP = [13, 16, 32], NIGHT_BOTTOM = [22, 27, 52];
+        const DOMAINS = ['ml', 'chips', 'music', 'mind'];
+        const HUE = { ml: [63, 127, 130], chips: [169, 96, 58], music: [181, 86, 106], mind: [111, 138, 74] };
+        const SNOW = [251, 248, 240];
+
+        const LEGENDS = {
+            grove: '<b>Trunk</b> a field; it grows for every concept.<br><b>Branch</b> a concept. Length is depth, thickness is revisits.<br><b>Twigs</b> re-explanations.<br><b>Foliage</b> retained.<br><b>Bud</b> only encountered.<br><b>Tendril and flower</b> a bridge between fields.<br><b>Pale bare branch</b> weak. Winter, not damage.',
+            sky: '<b>Region</b> a field.<br><b>Star</b> a concept. Size is depth, halo is revisits.<br><b>Spikes and nebula</b> retained.<br><b>Faint pinprick</b> only encountered.<br><b>Constellation line</b> earned when both stars are explained.<br><b>Light bridge</b> a bridge between fields.<br><b>Small warm red star</b> weak. A red dwarf, still there.',
+            ground: '<b>Range</b> a field.<br><b>Peak</b> a concept. Height is depth and revisits.<br><b>Wide footprint, snow</b> retained.<br><b>Marker</b> only encountered.<br><b>Ridge</b> related concepts in one field.<br><b>Pass with a cairn</b> a bridge between fields.<br><b>Mist</b> weak. The land stays; the color drains.'
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // THE SHARED LEARNING HISTORY. Twelve months, four fields, 28 concepts.
+        // m0: first met. ex: months explained. ret: month retained. weak: month a recall failed.
+        // rel: related concepts in the same field. br: bridges the learner made across fields.
+        // ═══════════════════════════════════════════════════════════════════
+
+        const DATA = [
+            {id: 'attention', name: 'Attention', d: 'ml', m0: 1, ex: [1, 2, 5], ret: 6, rel: [], br: [{to: 'working-memory', m: 6}]},
+            {id: 'embeddings', name: 'Embeddings', d: 'ml', m0: 1, ex: [1, 3], ret: 5, rel: ['attention']},
+            {id: 'backprop', name: 'Backpropagation', d: 'ml', m0: 1, ex: [1], weak: 6, rel: []},
+            {id: 'transformers', name: 'Transformers', d: 'ml', m0: 2, ex: [2, 3, 6, 9], ret: 8, rel: ['attention', 'embeddings']},
+            {id: 'tokenization', name: 'Tokenization', d: 'ml', m0: 2, ex: [], rel: ['embeddings']},
+            {id: 'rag', name: 'Retrieval-augmented generation', d: 'ml', m0: 4, ex: [4, 5], ret: 9, rel: ['embeddings']},
+            {id: 'fine-tuning', name: 'Fine-tuning', d: 'ml', m0: 5, ex: [5], rel: ['transformers']},
+            {id: 'moe', name: 'Mixture of experts', d: 'ml', m0: 8, ex: [8, 10], rel: ['transformers']},
+            {id: 'speculative-decoding', name: 'Speculative decoding', d: 'ml', m0: 11, ex: [11], rel: ['transformers']},
+            {id: 'kv-cache', name: 'KV cache', d: 'ml', m0: 12, ex: [], rel: ['attention']},
+
+            {id: 'soc-basics', name: 'SoC basics', d: 'chips', m0: 3, ex: [3, 4], ret: 7, rel: []},
+            {id: 'noc', name: 'Network on chip', d: 'chips', m0: 3, ex: [3, 6, 7], ret: 9, rel: ['soc-basics'], br: [{to: 'moe', m: 10}]},
+            {id: 'cache-coherence', name: 'Cache coherence', d: 'chips', m0: 4, ex: [4], weak: 9, rel: ['soc-basics']},
+            {id: 'topologies', name: 'Interconnect topologies', d: 'chips', m0: 6, ex: [6, 8], rel: ['noc']},
+            {id: 'memory-hierarchy', name: 'Memory hierarchy', d: 'chips', m0: 7, ex: [7, 9], ret: 11, rel: ['cache-coherence'], br: [{to: 'working-memory', m: 9}]},
+            {id: 'chiplets', name: 'Chiplets', d: 'chips', m0: 10, ex: [10], rel: ['topologies']},
+
+            {id: 'intervals', name: 'Intervals', d: 'music', m0: 2, ex: [2, 3], ret: 6, rel: []},
+            {id: 'harmonics', name: 'Harmonics', d: 'music', m0: 2, ex: [2, 4, 7], ret: 8, rel: ['intervals'], br: [{to: 'embeddings', m: 7}]},
+            {id: 'counterpoint', name: 'Counterpoint', d: 'music', m0: 3, ex: [3], weak: 8, rel: ['intervals']},
+            {id: 'chord-functions', name: 'Chord functions', d: 'music', m0: 5, ex: [5, 6], ret: 10, rel: ['intervals']},
+            {id: 'modes', name: 'Modes', d: 'music', m0: 6, ex: [], rel: ['chord-functions']},
+            {id: 'polymeter', name: 'Polymeter', d: 'music', m0: 9, ex: [9, 11], rel: []},
+
+            {id: 'working-memory', name: 'Working memory', d: 'mind', m0: 4, ex: [4, 5], ret: 8, rel: []},
+            {id: 'spaced-repetition', name: 'Spaced repetition', d: 'mind', m0: 4, ex: [4, 6, 8], ret: 9, rel: ['working-memory']},
+            {id: 'chunking', name: 'Chunking', d: 'mind', m0: 5, ex: [5], rel: ['working-memory']},
+            {id: 'predictive-processing', name: 'Predictive processing', d: 'mind', m0: 8, ex: [8, 9], rel: [], br: [{to: 'transformers', m: 11}]},
+            {id: 'flow-state', name: 'Flow state', d: 'mind', m0: 10, ex: [10], rel: ['chunking']},
+            {id: 'sleep-consolidation', name: 'Sleep consolidation', d: 'mind', m0: 11, ex: [11], rel: ['spaced-repetition']},
+        ];
+        const BY_ID = Object.fromEntries(DATA.map(c => [c.id, c]));
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DETERMINISM. Identity is hashed; variation is seeded noise.
+        // ═══════════════════════════════════════════════════════════════════
+
+        function xmur3(str) {
+            let h = 1779033703 ^ str.length;
+            for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+            return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; };
+        }
+        function mulberry32(a) {
+            return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+        }
+        function rng(key) { return mulberry32(xmur3(params.seed + '|' + key)()); }
+
+        function mixRGB(a, b, k) { return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]; }
+        function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+        function wobble(x, y, salt, amp) { return (noise(x * 0.012 + salt, y * 0.012, salt * 0.3) - 0.5) * 2 * amp * params.variation; }
+
+        let centers = {}, pos = {};
+
+        function computeLayout() {
+            const rot = rng('rot')() * TWO_PI;
+            DOMAINS.forEach((d, i) => {
+                const r = rng('dom:' + d);
+                const a = rot + i * TWO_PI / 4 + (r() - 0.5) * 0.5;
+                const rad = 300 + (r() - 0.5) * 80;
+                centers[d] = {x: 600 + cos(a) * rad, y: 600 + sin(a) * rad};
+            });
+            const raw = {};
+            for (const c of DATA) {
+                const r = rng('pos:' + c.id);
+                const rad = 50 + 170 * sqrt(r()), a = r() * TWO_PI;
+                raw[c.id] = {x: centers[c.d].x + cos(a) * rad, y: centers[c.d].y + sin(a) * rad};
+            }
+            // Related concepts pull toward each other. A pure function of the ids, so it never drifts.
+            for (const c of DATA) {
+                let mx = raw[c.id].x, my = raw[c.id].y, n = 1;
+                for (const rid of c.rel) { mx += raw[rid].x; my += raw[rid].y; n++; }
+                for (const o of DATA) if (o.rel.includes(c.id)) { mx += raw[o.id].x; my += raw[o.id].y; n++; }
+                const tx = mx / n, ty = my / n;
+                pos[c.id] = {
+                    x: constrain(raw[c.id].x + (tx - raw[c.id].x) * 0.35, 120, W - 120),
+                    y: constrain(raw[c.id].y + (ty - raw[c.id].y) * 0.35, 120, H - 160)
+                };
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // KNOWLEDGE STATE AT A GIVEN MONTH
+        // ═══════════════════════════════════════════════════════════════════
+
+        function deriveState(M) {
+            const concepts = DATA.filter(c => c.m0 <= M).map(c => {
+                const ex = c.ex.filter(m => m <= M);
+                const n = ex.length;
+                const weak = !!(c.weak && c.weak <= M && !ex.some(m => m > c.weak));
+                return {
+                    ...c, n,
+                    depth: n === 0 ? 0 : min(1, 0.3 + 0.2 * n),
+                    retained: !!(c.ret && c.ret <= M),
+                    weak,
+                    recent: c.m0 === M || ex.includes(M),
+                    p: pos[c.id]
+                };
+            });
+            const present = new Set(concepts.map(c => c.id));
+            const bridges = [];
+            for (const c of DATA) for (const b of (c.br || [])) {
+                if (b.m <= M && present.has(c.id) && present.has(b.to)) bridges.push({a: c.id, b: b.to, m: b.m, recent: b.m === M});
+            }
+            const events = [];
+            const fresh = concepts.filter(c => c.m0 === M).map(c => c.name);
+            if (fresh.length) events.push(`met ${fresh.join(', ')}`);
+            const re = concepts.filter(c => c.m0 < M && c.ex.includes(M)).map(c => c.name);
+            if (re.length) events.push(`revisited ${re.join(', ')}`);
+            const settled = concepts.filter(c => c.ret === M).map(c => c.name);
+            if (settled.length) events.push(`retained ${settled.join(', ')}`);
+            for (const b of bridges) if (b.m === M) events.push(`bridged ${BY_ID[b.a].name} and ${BY_ID[b.b].name}`);
+            const faded = concepts.filter(c => c.weak === M).map(c => c.name);
+            if (faded.length) events.push(`${faded.join(', ')} slipped`);
+            return {concepts, bridges, events, byId: Object.fromEntries(concepts.map(c => [c.id, c]))};
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SETUP AND RENDER DISPATCH
+        // ═══════════════════════════════════════════════════════════════════
+
+        let ready = false;
+
+        function setup() {
+            const canvas = createCanvas(W, H);
+            canvas.parent('canvas-container');
+            pixelDensity(1);
+            noLoop();
+            noiseSeed(params.seed);
+            computeLayout();
+            ready = true;
+            document.querySelector('.loading').style.display = 'none';
+            document.getElementById('legend').innerHTML = LEGENDS[params.theme];
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => redraw());
+        }
+
+        function rerender() { noiseSeed(params.seed); computeLayout(); if (ready) redraw(); }
+
+        function draw() {
+            const st = deriveState(params.month);
+            if (params.theme === 'grove') renderGrove(st);
+            else if (params.theme === 'sky') renderSky(st);
+            else renderGround(st);
+            caption(st, params.theme === 'sky' ? [200, 205, 225] : INK);
+        }
+
+        function caption(st, col) {
+            const label = {grove: 'Grove', sky: 'Sky', ground: 'Ground'}[params.theme];
+            noStroke();
+            textFont('Lora');
+            textAlign(LEFT, BASELINE);
+            fill(col[0], col[1], col[2], 220);
+            textSize(15);
+            text(`Month ${params.month} of 12 · ${label}`, 34, H - 44);
+            fill(col[0], col[1], col[2], 160);
+            textSize(13);
+            const ev = st.events.length ? st.events.join(' · ') : 'a quiet month';
+            text(ev.length > 150 ? ev.slice(0, 147) + '…' : ev, 34, H - 22);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GROVE. Each field is a tree. Branches never move once placed.
+        // ═══════════════════════════════════════════════════════════════════
+
+        function renderGrove(st) {
+            const ctx = drawingContext;
+            background(PAPER[0], PAPER[1], PAPER[2]);
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+            // Soil
+            const soil = ctx.createLinearGradient(0, 990, 0, 1130);
+            soil.addColorStop(0, rgba(PAPER, 0));
+            soil.addColorStop(1, rgba(mixRGB(PAPER, BARK, 0.14), 1));
+            ctx.fillStyle = soil; ctx.fillRect(0, 990, W, 210);
+            ctx.strokeStyle = rgba(BARK, 0.35); ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let x = 40; x <= W - 40; x += 6) { const y = 1012 + wobble(x, 1012, 3, 3); x === 40 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+            ctx.stroke();
+
+            const tip = {};
+            const SPACING = 54, BASE_H = 70;
+
+            DOMAINS.forEach((d, i) => {
+                const r = rng('tree:' + d);
+                const baseX = 180 + i * (840 / 3) + (r() - 0.5) * 50, baseY = 1012;
+                const cs = st.concepts.filter(c => c.d === d).sort((a, b) => a.m0 - b.m0 || a.id.localeCompare(b.id));
+                const lean = (r() - 0.5) * 0.22;
+                if (!cs.length) {
+                    // A field not yet begun: a seed in the soil.
+                    ctx.fillStyle = rgba(mixRGB(HUE[d], PAPER, 0.5), 0.9);
+                    ctx.beginPath(); ctx.ellipse(baseX, baseY + 10, 3.5, 2.4, 0.4, 0, TWO_PI); ctx.fill();
+                    return;
+                }
+                const trunkH = BASE_H + cs.length * SPACING + 26;
+                const sumN = cs.reduce((s, c) => s + c.n, 0);
+                const salt = 10 + i * 7;
+                const trunkPt = s => ({x: baseX + lean * trunkH * s + wobble(baseX, baseY - trunkH * s, salt, 14) * s, y: baseY - trunkH * s});
+
+                // Trunk, tapered
+                const steps = 40;
+                for (let k = 0; k < steps; k++) {
+                    const a = trunkPt(k / steps), b = trunkPt((k + 1) / steps);
+                    ctx.strokeStyle = rgba(BARK, 0.95);
+                    ctx.lineWidth = lerp(4 + min(sumN, 26) * 0.45, 1.6, k / steps);
+                    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                }
+                // Root flare
+                ctx.strokeStyle = rgba(BARK, 0.6); ctx.lineWidth = 1.4;
+                for (let k = -2; k <= 2; k++) {
+                    if (k === 0) continue;
+                    ctx.beginPath(); ctx.moveTo(baseX, baseY - 6);
+                    ctx.quadraticCurveTo(baseX + k * 10, baseY + 2, baseX + k * (18 + abs(k) * 6), baseY + 10 + abs(k) * 2);
+                    ctx.stroke();
+                }
+
+                cs.forEach((c, j) => {
+                    const attach = trunkPt((BASE_H + j * SPACING) / trunkH);
+                    const rr = rng('br:' + c.id);
+                    const side = rr() < 0.5 ? -1 : 1;
+                    let ang = -HALF_PI + side * (0.95 + (rr() - 0.5) * 0.45);
+                    if (c.weak) ang += side * 0.4;
+                    const L = c.n === 0 ? 16 : 44 + 112 * c.depth;
+                    const w = 1 + 0.85 * c.n;
+                    const barkCol = c.weak ? mixRGB(BARK, PAPER, 0.55) : BARK;
+                    const end = drawBranch(ctx, attach, ang, L, w, barkCol, c.id, rr);
+                    tip[c.id] = end;
+
+                    // Re-explanations become twigs, not length.
+                    const twigTips = [];
+                    for (let k = 1; k < c.n && k < 5; k++) {
+                        const f = 0.3 + 0.16 * k;
+                        const at = {x: lerp(attach.x, end.x, f), y: lerp(attach.y, end.y, f)};
+                        const tang = ang + (k % 2 ? -1 : 1) * side * (0.55 + (rr() - 0.5) * 0.3);
+                        twigTips.push(drawBranch(ctx, at, tang, L * 0.42, w * 0.55, barkCol, c.id + ':' + k, rr));
+                    }
+
+                    if (c.n === 0) {
+                        // Bud: only encountered.
+                        ctx.fillStyle = rgba(mixRGB(HUE[d], PAPER, 0.35), 0.95);
+                        ctx.beginPath(); ctx.ellipse(end.x, end.y, 3.2, 4.6, ang + HALF_PI, 0, TWO_PI); ctx.fill();
+                    } else if (!c.weak) {
+                        const count = c.retained ? 9 : 3;
+                        leaves(ctx, end, count, HUE[d], c.retained ? 0.78 : 0.5, rr, c.retained ? 15 : 8);
+                        for (const tt of twigTips) leaves(ctx, tt, c.retained ? 5 : 2, HUE[d], c.retained ? 0.72 : 0.45, rr, 10);
+                    }
+                    if (c.recent) {
+                        ctx.fillStyle = rgba(HUE[d], 0.16);
+                        ctx.beginPath(); ctx.arc(end.x, end.y, 12, 0, TWO_PI); ctx.fill();
+                    }
+                });
+            });
+
+            // Bridges: tendrils between trees, a flower at the join.
+            for (const b of st.bridges) {
+                const A = tip[b.a], B = tip[b.b];
+                if (!A || !B) continue;
+                const ha = HUE[BY_ID[b.a].d], hb = HUE[BY_ID[b.b].d];
+                const mid = {x: (A.x + B.x) / 2, y: min(A.y, B.y) - 70 - abs(A.x - B.x) * 0.12};
+                const grad = ctx.createLinearGradient(A.x, A.y, B.x, B.y);
+                grad.addColorStop(0, rgba(ha, 0.85)); grad.addColorStop(1, rgba(hb, 0.85));
+                ctx.strokeStyle = grad; ctx.lineWidth = 1.3;
+                ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.quadraticCurveTo(mid.x, mid.y, B.x, B.y); ctx.stroke();
+                // small leaves along the tendril
+                const rr = rng('vine:' + b.a + b.b);
+                for (let k = 1; k <= 4; k++) {
+                    const t = k / 5;
+                    const x = (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * mid.x + t * t * B.x;
+                    const y = (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * mid.y + t * t * B.y;
+                    ctx.fillStyle = rgba(mixRGB(ha, hb, t), 0.6);
+                    ctx.beginPath(); ctx.ellipse(x, y, 5, 2.6, rr() * PI, 0, TWO_PI); ctx.fill();
+                }
+                // flower at the apex
+                const fx = 0.25 * A.x + 0.5 * mid.x + 0.25 * B.x, fy = 0.25 * A.y + 0.5 * mid.y + 0.25 * B.y;
+                for (let k = 0; k < 6; k++) {
+                    const a = k * TWO_PI / 6 + rr() * 0.2;
+                    ctx.fillStyle = rgba(k % 2 ? ha : hb, 0.85);
+                    ctx.beginPath(); ctx.ellipse(fx + cos(a) * 5, fy + sin(a) * 5, 4.5, 2.6, a, 0, TWO_PI); ctx.fill();
+                }
+                ctx.fillStyle = rgba(PAPER, 1); ctx.beginPath(); ctx.arc(fx, fy, 2, 0, TWO_PI); ctx.fill();
+                if (b.recent) { ctx.strokeStyle = rgba(mixRGB(ha, hb, 0.5), 0.5); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(fx, fy, 14, 0, TWO_PI); ctx.stroke(); }
+            }
+        }
+
+        function drawBranch(ctx, from, ang, L, w, col, salt, rr) {
+            const s = xmur3(salt)() % 1000;
+            const n = 10;
+            let px = from.x, py = from.y;
+            const curve = (rr() - 0.5) * 0.5;
+            for (let k = 1; k <= n; k++) {
+                const t = k / n;
+                const a = ang + curve * t;
+                const bx = from.x + cos(a) * L * t, by = from.y + sin(a) * L * t;
+                const off = wobble(bx, by, s, L * 0.09);
+                const x = bx + cos(a + HALF_PI) * off, y = by + sin(a + HALF_PI) * off;
+                ctx.strokeStyle = rgba(col, 0.95);
+                ctx.lineWidth = lerp(w, max(0.6, w * 0.35), t);
+                ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x, y); ctx.stroke();
+                px = x; py = y;
+            }
+            return {x: px, y: py};
+        }
+
+        function leaves(ctx, at, count, hue, alpha, rr, spread) {
+            for (let k = 0; k < count; k++) {
+                const a = rr() * TWO_PI, d = rr() * spread;
+                const x = at.x + cos(a) * d, y = at.y + sin(a) * d - 2;
+                ctx.fillStyle = rgba(mixRGB(hue, PAPER, rr() * 0.25), alpha);
+                ctx.beginPath(); ctx.ellipse(x, y, 6.5, 3.6, rr() * PI, 0, TWO_PI); ctx.fill();
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SKY. Each field is a region. Constellation lines are earned.
+        // ═══════════════════════════════════════════════════════════════════
+
+        function renderSky(st) {
+            const ctx = drawingContext;
+            const g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, rgba(NIGHT_TOP, 1)); g.addColorStop(1, rgba(NIGHT_BOTTOM, 1));
+            ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+            // The unknown sky: a field of tiny stars nobody has learned.
+            const r = rng('field');
+            for (let i = 0; i < 420; i++) {
+                const x = r() * W, y = r() * H, s = 0.4 + r() * 1.1, a = 0.12 + r() * 0.35;
+                ctx.fillStyle = rgba([220, 225, 240], a);
+                ctx.beginPath(); ctx.arc(x, y, s, 0, TWO_PI); ctx.fill();
+            }
+
+            // Nebulae: what has settled, accumulated as gas.
+            ctx.globalCompositeOperation = 'lighter';
+            for (const c of st.concepts) {
+                if (!c.retained) continue;
+                const R = 70 + 30 * c.n + wobble(c.p.x, c.p.y, 5, 25);
+                for (let k = 0; k < 3; k++) {
+                    const ox = wobble(c.p.x + k * 31, c.p.y, 9 + k, 30), oy = wobble(c.p.x, c.p.y + k * 37, 21 + k, 30);
+                    const gr = ctx.createRadialGradient(c.p.x + ox, c.p.y + oy, 0, c.p.x + ox, c.p.y + oy, R * (0.7 + k * 0.2));
+                    gr.addColorStop(0, rgba(HUE[c.d], 0.11)); gr.addColorStop(1, rgba(HUE[c.d], 0));
+                    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(c.p.x + ox, c.p.y + oy, R * (0.7 + k * 0.2), 0, TWO_PI); ctx.fill();
+                }
+            }
+            // Light bridges: a soft band, then a bright filament.
+            for (const b of st.bridges) {
+                const A = pos[b.a], B = pos[b.b], ha = HUE[BY_ID[b.a].d], hb = HUE[BY_ID[b.b].d];
+                const grad = ctx.createLinearGradient(A.x, A.y, B.x, B.y);
+                grad.addColorStop(0, rgba(ha, 0.10)); grad.addColorStop(1, rgba(hb, 0.10));
+                ctx.strokeStyle = grad; ctx.lineWidth = 34; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Constellation lines within a field: only once both stars are explained.
+            for (const c of st.concepts) for (const rid of c.rel) {
+                const o = st.byId[rid];
+                if (!o || c.n === 0 || o.n === 0) continue;
+                const both = c.retained && o.retained;
+                ctx.strokeStyle = rgba(mixRGB(HUE[c.d], [230, 232, 245], 0.35), both ? 0.42 : 0.2);
+                ctx.lineWidth = both ? 1 : 0.7;
+                ctx.beginPath(); ctx.moveTo(c.p.x, c.p.y); ctx.lineTo(o.p.x, o.p.y); ctx.stroke();
+            }
+            for (const b of st.bridges) {
+                const A = pos[b.a], B = pos[b.b], ha = HUE[BY_ID[b.a].d], hb = HUE[BY_ID[b.b].d];
+                const grad = ctx.createLinearGradient(A.x, A.y, B.x, B.y);
+                grad.addColorStop(0, rgba(mixRGB(ha, [255, 255, 255], 0.4), 0.75)); grad.addColorStop(1, rgba(mixRGB(hb, [255, 255, 255], 0.4), 0.75));
+                ctx.strokeStyle = grad; ctx.lineWidth = 1.2;
+                ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+                for (const P of [A, B]) {
+                    ctx.strokeStyle = rgba([235, 238, 250], b.recent ? 0.8 : 0.45); ctx.lineWidth = 0.9;
+                    ctx.beginPath(); ctx.arc(P.x, P.y, 11, 0, TWO_PI); ctx.stroke();
+                }
+            }
+
+            // Stars
+            for (const c of st.concepts) {
+                const {x, y} = c.p;
+                if (c.n === 0) {
+                    ctx.fillStyle = rgba(mixRGB(HUE[c.d], [230, 232, 245], 0.6), 0.65);
+                    ctx.beginPath(); ctx.arc(x, y, 1.3, 0, TWO_PI); ctx.fill();
+                    continue;
+                }
+                if (c.weak) {
+                    const red = [217, 130, 90];
+                    const gr = ctx.createRadialGradient(x, y, 0, x, y, 9);
+                    gr.addColorStop(0, rgba(red, 0.35)); gr.addColorStop(1, rgba(red, 0));
+                    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 9, 0, TWO_PI); ctx.fill();
+                    ctx.fillStyle = rgba(red, 0.95); ctx.beginPath(); ctx.arc(x, y, 1.9, 0, TWO_PI); ctx.fill();
+                    continue;
+                }
+                const size = 1.6 + 1.6 * c.n;
+                const halo = size * (3 + 0.6 * c.n);
+                ctx.globalCompositeOperation = 'lighter';
+                const gr = ctx.createRadialGradient(x, y, 0, x, y, halo);
+                gr.addColorStop(0, rgba(HUE[c.d], 0.45)); gr.addColorStop(1, rgba(HUE[c.d], 0));
+                ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, halo, 0, TWO_PI); ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+                if (c.retained) {
+                    ctx.strokeStyle = rgba([245, 246, 252], 0.55); ctx.lineWidth = 0.7;
+                    const sp = size * 4.5;
+                    for (let k = 0; k < 4; k++) {
+                        const a = k * HALF_PI;
+                        ctx.beginPath(); ctx.moveTo(x + cos(a) * size * 1.2, y + sin(a) * size * 1.2); ctx.lineTo(x + cos(a) * sp, y + sin(a) * sp); ctx.stroke();
+                    }
+                }
+                ctx.fillStyle = rgba(mixRGB(HUE[c.d], [255, 255, 255], 0.55), 0.98);
+                ctx.beginPath(); ctx.arc(x, y, size * 0.75, 0, TWO_PI); ctx.fill();
+                if (c.recent) { ctx.strokeStyle = rgba([245, 246, 252], 0.6); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(x, y, size * 2.6 + 4, 0, TWO_PI); ctx.stroke(); }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GROUND. Each field is a range. The heightfield is only ever added to.
+        // ═══════════════════════════════════════════════════════════════════
+
+        const G = 150, CELL = W / G;
+
+        function renderGround(st) {
+            const ctx = drawingContext;
+            background(PAPER[0], PAPER[1], PAPER[2]);
+            const ground = new Float32Array(G * G), tR = new Float32Array(G * G), tG = new Float32Array(G * G), tB = new Float32Array(G * G), tW = new Float32Array(G * G);
+
+            const deposit = (px, py, h, sigma, hue, tintK) => {
+                const sg = sigma / CELL, cx = px / CELL - 0.5, cy = py / CELL - 0.5, inv = 1 / (2 * sg * sg), rr = ceil(sg * 3);
+                for (let gy = max(0, floor(cy - rr)); gy <= min(G - 1, ceil(cy + rr)); gy++)
+                    for (let gx = max(0, floor(cx - rr)); gx <= min(G - 1, ceil(cx + rr)); gx++) {
+                        const dx = gx - cx, dy = gy - cy, g = h * Math.exp(-(dx * dx + dy * dy) * inv);
+                        if (g < 0.002) continue;
+                        const i = gy * G + gx;
+                        ground[i] += g;
+                        if (tintK > 0) { tR[i] += hue[0] * g * tintK; tG[i] += hue[1] * g * tintK; tB[i] += hue[2] * g * tintK; tW[i] += g * tintK; }
+                    }
+            };
+            const ridge = (A, B, h, sigma, hue) => {
+                const d = dist(A.x, A.y, B.x, B.y), steps = max(2, floor(d / 12));
+                for (let k = 0; k <= steps; k++) {
+                    const t = k / steps, bump = sin(t * PI);
+                    deposit(lerp(A.x, B.x, t), lerp(A.y, B.y, t), h * (0.55 + 0.45 * bump), sigma, hue, 0.3);
+                }
+            };
+
+            for (const c of st.concepts) {
+                if (c.n === 0) continue;
+                const h = 0.3 + 0.16 * c.n + (c.retained ? 0.22 : 0);
+                const sigma = 26 + 9 * c.n + (c.retained ? 16 : 0);
+                deposit(c.p.x, c.p.y, h, sigma, HUE[c.d], c.weak ? 0 : 1);
+            }
+            for (const c of st.concepts) for (const rid of c.rel) {
+                const o = st.byId[rid];
+                if (!o || c.n === 0 || o.n === 0) continue;
+                ridge(c.p, o.p, 0.6 * min(0.3 + 0.16 * c.n, 0.3 + 0.16 * o.n), 18, HUE[c.d]);
+            }
+            for (const b of st.bridges) {
+                const A = st.byId[b.a], B = st.byId[b.b];
+                ridge(A.p, B.p, 0.8 * min(0.3 + 0.16 * A.n, 0.3 + 0.16 * B.n), 26, mixRGB(HUE[A.d], HUE[B.d], 0.5));
+            }
+            let maxH = 0;
+            for (let i = 0; i < G * G; i++) {
+                const gx = i % G, gy = (i / G) | 0;
+                ground[i] += (noise(gx * 0.05 + 80, gy * 0.05 + 80) * 0.6 + noise(gx * 0.13 + 80, gy * 0.13 + 80) * 0.4 - 0.5) * 0.09 * params.variation;
+                if (ground[i] > maxH) maxH = ground[i];
+            }
+
+            // Hypsometric tint, snow, and a quiet fog on low ground.
+            const img = createImage(G, G);
+            img.loadPixels();
+            for (let i = 0; i < G * G; i++) {
+                const h = ground[i], gx = i % G, gy = (i / G) | 0;
+                let r = PAPER[0], g = PAPER[1], bl = PAPER[2];
+                if (tW[i] > 0) { const k = min(0.42, max(0, h) * 0.55); r += (tR[i] / tW[i] - r) * k; g += (tG[i] / tW[i] - g) * k; bl += (tB[i] / tW[i] - bl) * k; }
+                if (h > 0.85) { const k = min(1, (h - 0.85) / 0.3) * 0.85; r += (SNOW[0] - r) * k; g += (SNOW[1] - g) * k; bl += (SNOW[2] - bl) * k; }
+                if (h < 0.12) { const f = (0.12 - max(h, 0)) / 0.12, n = noise(gx * 0.06 + 200, gy * 0.06 + 200), k = f * (0.1 + 0.4 * n); r += (214 - r) * k; g += (218 - g) * k; bl += (216 - bl) * k; }
+                img.pixels[i * 4] = r; img.pixels[i * 4 + 1] = g; img.pixels[i * 4 + 2] = bl; img.pixels[i * 4 + 3] = 255;
+            }
+            img.updatePixels();
+            image(img, 0, 0, W, H);
+
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            let li = 0;
+            for (let level = 0.1; level <= maxH; level += 0.07, li++) {
+                const segs = marchingSquares(ground, level);
+                if (!segs.length) continue;
+                ctx.beginPath();
+                for (let i = 0; i < segs.length; i += 2) { ctx.moveTo(segs[i][0], segs[i][1]); ctx.lineTo(segs[i + 1][0], segs[i + 1][1]); }
+                const index = li % 4 === 0;
+                ctx.strokeStyle = rgba(INK, index ? 0.62 : 0.4); ctx.lineWidth = index ? 1.25 : 0.8; ctx.stroke();
+            }
+
+            // Mist over weak knowledge. The land is still under it.
+            for (const c of st.concepts) {
+                if (!c.weak) continue;
+                const R = 40 + 12 * c.n;
+                for (let k = 0; k < 4; k++) {
+                    const ox = wobble(c.p.x + k * 17, c.p.y, 40 + k, 22), oy = wobble(c.p.x, c.p.y + k * 19, 50 + k, 22);
+                    const gr = ctx.createRadialGradient(c.p.x + ox, c.p.y + oy, 0, c.p.x + ox, c.p.y + oy, R);
+                    gr.addColorStop(0, rgba([228, 229, 226], 0.5)); gr.addColorStop(1, rgba([228, 229, 226], 0));
+                    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(c.p.x + ox, c.p.y + oy, R, 0, TWO_PI); ctx.fill();
+                }
+            }
+
+            // Survey markers, cairns, and the ring of the recent.
+            for (const c of st.concepts) {
+                if (c.n === 0) {
+                    ctx.strokeStyle = rgba(INK, 0.7); ctx.lineWidth = 0.9;
+                    ctx.beginPath(); ctx.moveTo(c.p.x, c.p.y - 5); ctx.lineTo(c.p.x + 4.5, c.p.y + 3); ctx.lineTo(c.p.x - 4.5, c.p.y + 3); ctx.closePath(); ctx.stroke();
+                }
+                if (c.recent) { ctx.strokeStyle = rgba(HUE[c.d], 0.8); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(c.p.x, c.p.y, 9, 0, TWO_PI); ctx.stroke(); }
+            }
+            for (const b of st.bridges) {
+                const A = pos[b.a], B = pos[b.b], mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+                ctx.strokeStyle = rgba(INK, 0.8); ctx.lineWidth = 1.3;
+                for (let k = 0; k < 3; k++) { const wdt = 9 - k * 2.5; ctx.beginPath(); ctx.moveTo(mx - wdt / 2, my + 4 - k * 3.2); ctx.lineTo(mx + wdt / 2, my + 4 - k * 3.2); ctx.stroke(); }
+                if (b.recent) { ctx.strokeStyle = rgba(INK, 0.4); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(mx, my, 14, 0, TWO_PI); ctx.stroke(); }
+            }
+        }
+
+        function marchingSquares(field, l) {
+            const out = [];
+            const px = (gx, f) => (gx + 0.5 + f) * CELL, py = (gy, f) => (gy + 0.5 + f) * CELL;
+            for (let gy = 0; gy < G - 1; gy++) for (let gx = 0; gx < G - 1; gx++) {
+                const v0 = field[gy * G + gx], v1 = field[gy * G + gx + 1], v2 = field[(gy + 1) * G + gx + 1], v3 = field[(gy + 1) * G + gx];
+                const idx = (v0 > l ? 8 : 0) | (v1 > l ? 4 : 0) | (v2 > l ? 2 : 0) | (v3 > l ? 1 : 0);
+                if (idx === 0 || idx === 15) continue;
+                const T = [px(gx, (l - v0) / (v1 - v0)), py(gy, 0)], R = [px(gx, 1), py(gy, (l - v1) / (v2 - v1))];
+                const B = [px(gx, (l - v3) / (v2 - v3)), py(gy, 1)], L = [px(gx, 0), py(gy, (l - v0) / (v3 - v0))];
+                switch (idx) {
+                    case 1: case 14: out.push(L, B); break;
+                    case 2: case 13: out.push(B, R); break;
+                    case 3: case 12: out.push(L, R); break;
+                    case 4: case 11: out.push(T, R); break;
+                    case 5: out.push(L, T, B, R); break;
+                    case 6: case 9: out.push(T, B); break;
+                    case 7: case 8: out.push(L, T); break;
+                    case 10: out.push(T, R, L, B); break;
+                }
+            }
+            return out;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // UI
+        // ═══════════════════════════════════════════════════════════════════
+
+        function setTheme(t) {
+            params.theme = t;
+            for (const k of ['grove', 'sky', 'ground']) document.getElementById('theme-' + k).classList.toggle('active', k === t);
+            document.getElementById('legend').innerHTML = LEGENDS[t];
+            if (ready) redraw();
+        }
+        function updateParam(name, value) {
+            params[name] = name === 'variation' ? parseFloat(value) : parseInt(value);
+            document.getElementById(name + '-value').textContent = name === 'variation' ? params[name].toFixed(2) : String(params[name]);
+            if (ready) redraw();
+        }
+        function downloadPNG() { saveCanvas(`mindscape-${params.theme}-m${params.month}-${params.seed}`, 'png'); }
+        function updateSeedDisplay() { document.getElementById('seed-input').value = params.seed; }
+        function updateSeed() {
+            const s = parseInt(document.getElementById('seed-input').value);
+            if (s && s > 0) { params.seed = s; rerender(); } else updateSeedDisplay();
+        }
+        function previousSeed() { params.seed = Math.max(1, params.seed - 1); updateSeedDisplay(); rerender(); }
+        function nextSeed() { params.seed = params.seed + 1; updateSeedDisplay(); rerender(); }
+        function randomSeedAndUpdate() { params.seed = Math.floor(Math.random() * 999999) + 1; updateSeedDisplay(); rerender(); }
+        function resetParameters() {
+            params = {...defaultParams};
+            document.getElementById('month').value = params.month; document.getElementById('month-value').textContent = params.month;
+            document.getElementById('variation').value = params.variation; document.getElementById('variation-value').textContent = params.variation.toFixed(2);
+            updateSeedDisplay();
+            setTheme(params.theme);
+            rerender();
+        }
+        window.addEventListener('load', updateSeedDisplay);
+    </script>
+</body>
+</html>

@@ -8,14 +8,14 @@ import type { ReactNode } from "react";
 // out visually broken.
 
 const boxClassName =
-  "rounded-xl border border-black/[.08] bg-black/[.02] px-3 py-2 text-center text-xs font-medium text-zinc-700 dark:border-white/[.1] dark:bg-white/[.04] dark:text-zinc-200";
+  "rounded-sm border border-rule-strong px-3 py-2 text-center text-xs font-medium text-ink";
 
 function DiagramFrame({ children, caption }: { children: ReactNode; caption?: string }) {
   return (
-    <figure className="flex flex-col gap-3 overflow-x-auto rounded-2xl border border-black/[.06] bg-white p-5 dark:border-white/[.08] dark:bg-zinc-950">
+    <figure className="flex flex-col gap-3 overflow-x-auto border-y border-rule py-5">
       {children}
       {caption && (
-        <figcaption className="text-xs text-zinc-400 dark:text-zinc-600">{caption}</figcaption>
+        <figcaption className="meta">{caption}</figcaption>
       )}
     </figure>
   );
@@ -28,7 +28,7 @@ function RightArrow() {
       height="14"
       viewBox="0 0 22 14"
       fill="none"
-      className="shrink-0 stroke-zinc-400 dark:stroke-zinc-600"
+      className="shrink-0 stroke-ink-soft"
       strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -80,7 +80,7 @@ export function HubSpokeDiagram({
           width={width}
           height="36"
           viewBox={`0 0 ${width} 36`}
-          className="stroke-zinc-400 dark:stroke-zinc-600"
+          className="stroke-ink-soft"
           strokeWidth="1.5"
         >
           <line x1={hubX} y1="0" x2={hubX} y2="18" />
@@ -153,7 +153,7 @@ export function MeshDiagram({
         y1={a.y}
         x2={b.x}
         y2={b.y}
-        className="stroke-sky-500 dark:stroke-sky-400"
+        className="stroke-teal"
         strokeWidth="3"
       />,
     );
@@ -162,7 +162,7 @@ export function MeshDiagram({
   return (
     <DiagramFrame caption={caption}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        <g className="stroke-zinc-300 dark:stroke-zinc-700" strokeWidth="1.5">
+        <g className="stroke-rule-strong" strokeWidth="1.5">
           {gridLines}
         </g>
         <g>{highlightSegments}</g>
@@ -177,8 +177,8 @@ export function MeshDiagram({
                 r="22"
                 className={
                   onPath
-                    ? "fill-sky-500/10 stroke-sky-500 dark:stroke-sky-400"
-                    : "fill-black/[.02] stroke-zinc-400 dark:fill-white/[.04] dark:stroke-zinc-600"
+                    ? "fill-teal/15 stroke-teal"
+                    : "fill-transparent stroke-ink-soft"
                 }
                 strokeWidth="1.5"
               />
@@ -187,7 +187,7 @@ export function MeshDiagram({
                 y={y}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className="fill-zinc-700 text-[9px] font-medium dark:fill-zinc-200"
+                className="fill-ink text-[9px] font-medium"
               >
                 {label}
               </text>
@@ -211,8 +211,8 @@ function ComparisonSide({
   synced?: boolean;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center gap-2 rounded-xl border border-black/[.06] p-4 dark:border-white/[.08]">
-      <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{title}</span>
+    <div className="flex flex-1 flex-col items-center gap-2 border-t border-rule p-4">
+      <span className="meta text-ink">{title}</span>
       <div className="flex items-center gap-2">
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -227,7 +227,7 @@ function ComparisonSide({
                   className={
                     synced
                       ? "stroke-emerald-500 dark:stroke-emerald-400"
-                      : "stroke-zinc-300 dark:stroke-zinc-700"
+                      : "stroke-rule-strong"
                   }
                   strokeWidth="1.75"
                   strokeDasharray={synced ? undefined : "3,3"}
@@ -241,7 +241,7 @@ function ComparisonSide({
         className={
           synced
             ? "text-[10px] text-emerald-600 dark:text-emerald-400"
-            : "text-[10px] text-zinc-400 dark:text-zinc-600"
+            : "text-[10px] text-ink-soft"
         }
       >
         {synced ? "caches kept in sync" : "caches not synchronized"}
@@ -293,7 +293,7 @@ export function NodeGraphDiagram({
   return (
     <DiagramFrame caption={caption}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto">
-        <g className="stroke-zinc-300 dark:stroke-zinc-700" strokeWidth="1.5">
+        <g className="stroke-rule-strong" strokeWidth="1.5">
           {edges.map(([a, b]) => (
             <line
               key={`${a}-${b}`}
@@ -310,7 +310,7 @@ export function NodeGraphDiagram({
               cx={positions[i].x}
               cy={positions[i].y}
               r="30"
-              className="fill-violet-500/10 stroke-violet-500 dark:stroke-violet-400"
+              className="fill-ochre/15 stroke-ochre"
               strokeWidth="1.5"
             />
             <text
@@ -318,7 +318,7 @@ export function NodeGraphDiagram({
               y={positions[i].y}
               textAnchor="middle"
               dominantBaseline="middle"
-              className="fill-zinc-700 text-[9px] font-medium dark:fill-zinc-200"
+              className="fill-ink text-[9px] font-medium"
             >
               {label}
             </text>

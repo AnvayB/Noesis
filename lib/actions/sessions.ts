@@ -105,7 +105,7 @@ export async function createSessionAction(formData: FormData) {
       .run();
   }
 
-  redirect(status === "pending" ? "/sessions?status=pending" : `/sessions/${sessionId}`);
+  redirect(status === "pending" ? "/learn" : `/sessions/${sessionId}`);
 }
 
 export async function updateSessionAction(formData: FormData) {
@@ -305,5 +305,6 @@ export async function deleteSessionAction(formData: FormData) {
   await db.delete(learningSessions).where(eq(learningSessions.id, sessionId)).run();
 
   revalidatePath("/");
+  revalidatePath("/learn");
   revalidatePath("/sessions");
 }

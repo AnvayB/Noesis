@@ -77,13 +77,13 @@ export function ThemeToggle() {
       onClick={() => setTheme(NEXT_THEME[theme])}
       title={mounted ? LABEL[theme] : "Theme"}
       aria-label={mounted ? `Theme: ${LABEL[theme]}. Click to change.` : "Theme"}
-      className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 hover:bg-black/[.04] hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-white/[.08] dark:hover:text-zinc-200"
+      className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink"
     >
       <svg
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={1.25}
         strokeLinecap="round"
         strokeLinejoin="round"
         className="h-4 w-4"

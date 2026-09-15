@@ -1,327 +1,214 @@
 import Link from "next/link";
-import { DeleteSessionButton } from "@/components/DeleteSessionButton";
+import { CaptureForm } from "@/components/CaptureForm";
 import { Mindscape } from "@/components/Mindscape";
 import { NavHeader } from "@/components/NavHeader";
-import {
-  addCuriosityItemAction,
-  resolveCuriosityItemAction,
-} from "@/lib/actions/curiosity";
-import { startSessionAction } from "@/lib/actions/sessions";
+import { clearWeeklyFocusAction } from "@/lib/actions/focus";
 import { submitRecallAnswerAction } from "@/lib/actions/recall";
 import {
+  countInbox,
+  getWeeklyFocus,
   listMindscapeConcepts,
   listMindscapeRelations,
-  listOpenCuriosityItems,
   listRecentSessions,
 } from "@/lib/queries";
 import { getOrCreateDailyRecallPrompt } from "@/lib/recall";
-import {
-  CONCEPT_TAG_STYLE,
-  SESSION_STATUS_LABEL,
-  SESSION_STATUS_STYLE,
-} from "@/lib/tagColors";
 
 export const dynamic = "force-dynamic";
 
 function formatDate(iso: string) {
   return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
-    month: "short",
+    month: "long",
     day: "numeric",
     timeZone: "America/Los_Angeles",
   });
 }
 
-export default async function Home() {
-  const [
-    recentSessions,
-    backlogSessions,
-    curiosityItems,
-    mindscapeConcepts,
-    mindscapeRelations,
-    pendingRecall,
-  ] = await Promise.all([
-    listRecentSessions(5, { excludeStatus: "pending" }),
-    listRecentSessions(5, { status: "pending" }),
-    listOpenCuriosityItems(),
-    listMindscapeConcepts(),
-    listMindscapeRelations(),
-    getOrCreateDailyRecallPrompt(),
-  ]);
+// The recall prompt needs the model; if it is unavailable the page must
+// still render, so the failure is swallowed here and the sheet is absent.
+async function safeRecall() {
+  try {
+    return await getOrCreateDailyRecallPrompt();
+  } catch (error) {
+    console.error("recall prompt unavailable", error);
+    return null;
+  }
+}
+
+export default async function NowPage() {
+  const [inProgress, focus, inbox, mindscapeConcepts, mindscapeRelations, pendingRecall] =
+    await Promise.all([
+      listRecentSessions(5, { status: "started" }),
+      getWeeklyFocus(),
+      countInbox(),
+      listMindscapeConcepts(),
+      listMindscapeRelations(),
+      safeRecall(),
+    ]);
+
+  const focusIsInProgress = focus?.status === "started";
+  const inProgressOthers = inProgress.filter((s) => s.id !== focus?.id);
+  const waiting: string[] = [];
+  if (inbox.kept === 1) waiting.push("one thing kept for later");
+  if (inbox.kept > 1) waiting.push(`${inbox.kept} things kept for later`);
+  if (inbox.questions === 1) waiting.push("one question");
+  if (inbox.questions > 1) waiting.push(`${inbox.questions} questions`);
 
   return (
-    <div className="flex flex-1 flex-col bg-background font-sans">
-      <NavHeader
-        active="Home"
-        right={
-          <Link
-            href="/sessions/new"
-            className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            New Session
-          </Link>
-        }
-      />
+    <div className="flex flex-1 flex-col">
+      <NavHeader active="Now" />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-8 py-12">
-        <section aria-label="Mindscape" className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Mindscape
-            </h2>
-            {mindscapeConcepts.length > 0 && (
-              <Link
-                href="/mindscape"
-                className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-              >
-                Open full view
-              </Link>
-            )}
-          </div>
-          <div className="h-80 rounded-2xl border border-black/[.06] bg-white dark:border-white/[.08] dark:bg-zinc-950">
+      <main className="page-enter flex flex-1 flex-col">
+        {/* The map is the top of the page, not a widget on it. */}
+        <section aria-label="Mindscape" className="mx-auto w-full max-w-6xl px-2 sm:px-6">
+          <div className="map-fade h-[400px] sm:h-[460px]">
             <Mindscape
               concepts={mindscapeConcepts}
               relations={mindscapeRelations}
-              height={320}
+              height={460}
             />
           </div>
-        </section>
-
-        <section aria-label="Backlog" className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Backlog
-            </h2>
-            {backlogSessions.length > 0 && (
-              <Link
-                href="/sessions?status=pending"
-                className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-              >
-                View all
+          <div className="-mt-4 flex items-baseline justify-between px-4">
+            <p className="meta">The map so far.</p>
+            {mindscapeConcepts.length > 0 && (
+              <Link href="/mindscape" className="link link-soft text-sm">
+                Open the map
               </Link>
             )}
           </div>
+        </section>
 
-          {backlogSessions.length === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-600">
-              Nothing queued up. Add content you want to learn without
-              logging it yet.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {backlogSessions.map((session) => (
-                <li
-                  key={session.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-black/[.06] bg-white px-4 py-3 text-sm dark:border-white/[.08] dark:bg-zinc-950"
-                >
-                  <Link href={`/sessions/${session.id}`} className="flex flex-col">
-                    <span className="text-zinc-800 dark:text-zinc-100">
-                      {session.title}
-                    </span>
-                    {session.conceptName && (
-                      <span
-                        className={`w-fit rounded-full px-1.5 py-0.5 text-xs ${CONCEPT_TAG_STYLE}`}
-                      >
-                        {session.conceptName}
+        <div className="mx-auto grid w-full max-w-6xl gap-14 px-6 pb-20 pt-14 sm:px-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-20">
+          <div className="flex flex-col gap-14">
+            <section aria-label="This week" className="flex flex-col gap-3">
+              <h2 className="title text-[23px]">This week</h2>
+              {focus ? (
+                <div className="row row-last flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {focusIsInProgress && <span className="lamp-dot shrink-0" aria-hidden="true" />}
+                    <div className="flex min-w-0 flex-col">
+                      <Link href={`/sessions/${focus.id}`} className="link truncate font-serif text-[21px]">
+                        {focus.title}
+                      </Link>
+                      <span className="meta">
+                        {focus.status === "completed"
+                          ? "Explained. The week's thing is done."
+                          : focus.status === "started"
+                            ? `In progress since ${formatDate(focus.startedAt)}`
+                            : "Not started yet"}
+                        {focus.conceptName ? `, on ${focus.conceptName}` : ""}
                       </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {focus.status !== "completed" && (
+                      <Link href={`/sessions/${focus.id}`} className="btn btn-line btn-sm">
+                        {focus.status === "started" ? "Continue" : "Start"}
+                      </Link>
                     )}
-                  </Link>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <DeleteSessionButton
-                      sessionId={session.id}
-                      sessionTitle={session.title}
-                    />
-                    <form action={startSessionAction}>
-                      <input type="hidden" name="sessionId" value={session.id} />
-                      <button
-                        type="submit"
-                        className="whitespace-nowrap rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                      >
-                        Start
+                    <form action={clearWeeklyFocusAction}>
+                      <button type="submit" className="btn-quiet text-[13px]" title="Choose something else">
+                        Change
                       </button>
                     </form>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {pendingRecall && (
-          <section
-            aria-label="Quick recall"
-            className="flex flex-col gap-3 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950"
-          >
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Quick one
-            </h2>
-            <p className="text-sm text-zinc-700 dark:text-zinc-200">
-              {pendingRecall.attempt.prompt}
-            </p>
-            <form action={submitRecallAnswerAction} className="flex flex-col gap-3">
-              <input
-                type="hidden"
-                name="attemptId"
-                value={pendingRecall.attempt.id}
-              />
-              <textarea
-                name="response"
-                rows={2}
-                placeholder="Type what you remember, or just pick below"
-                className="rounded-lg border border-black/[.08] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-white/[.1] dark:bg-zinc-950 dark:text-zinc-100"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  name="outcome"
-                  value="remembered"
-                  className="rounded-full bg-black/[.06] px-3 py-1.5 text-xs text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
-                >
-                  Remembered it
-                </button>
-                <button
-                  type="submit"
-                  name="outcome"
-                  value="partial"
-                  className="rounded-full bg-black/[.06] px-3 py-1.5 text-xs text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
-                >
-                  Sort of
-                </button>
-                <button
-                  type="submit"
-                  name="outcome"
-                  value="forgot"
-                  className="rounded-full bg-black/[.06] px-3 py-1.5 text-xs text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
-                >
-                  Drew a blank
-                </button>
-              </div>
-            </form>
-          </section>
-        )}
-
-        <div className="grid gap-8 sm:grid-cols-2">
-          <section aria-label="Recent sessions" className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                Recent sessions
-              </h2>
-              {recentSessions.length > 0 && (
-                <Link
-                  href="/sessions"
-                  className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-                >
-                  View all
-                </Link>
+                </div>
+              ) : (
+                <p className="meta">
+                  Nothing chosen for this week yet.{" "}
+                  <Link href="/learn" className="link">
+                    Pick one thing to learn
+                  </Link>
+                  , and it will sit here until it is explained.
+                </p>
               )}
-            </div>
+            </section>
 
-            {recentSessions.length === 0 ? (
-              <p className="text-sm text-zinc-400 dark:text-zinc-600">
-                Nothing logged yet.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {recentSessions.map((session) => (
-                  <li
-                    key={session.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-black/[.06] bg-white px-4 py-3 text-sm dark:border-white/[.08] dark:bg-zinc-950"
-                  >
-                    <Link href={`/sessions/${session.id}`} className="flex flex-col gap-1">
-                      <span className="text-zinc-800 dark:text-zinc-100">
-                        {session.title}
-                      </span>
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <span
-                          className={`w-fit rounded-full px-1.5 py-0.5 text-xs ${SESSION_STATUS_STYLE[session.status]}`}
-                        >
-                          {SESSION_STATUS_LABEL[session.status]}
-                        </span>
-                        {session.conceptName && (
-                          <span
-                            className={`w-fit rounded-full px-1.5 py-0.5 text-xs ${CONCEPT_TAG_STYLE}`}
-                          >
-                            {session.conceptName}
+            {inProgressOthers.length > 0 && (
+              <section aria-label="In progress" className="flex flex-col gap-3">
+                <h2 className="title text-[23px]">In progress</h2>
+                <ul>
+                  {inProgressOthers.map((session, i) => (
+                    <li
+                      key={session.id}
+                      className={`row flex items-center justify-between gap-4 ${i === inProgressOthers.length - 1 ? "row-last" : ""}`}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="lamp-dot shrink-0" aria-hidden="true" />
+                        <div className="flex min-w-0 flex-col">
+                          <Link href={`/sessions/${session.id}`} className="link truncate font-serif text-[19px]">
+                            {session.title}
+                          </Link>
+                          <span className="meta">
+                            Started {formatDate(session.startedAt)}
+                            {session.conceptName ? `, on ${session.conceptName}` : ""}
                           </span>
-                        )}
-                      </span>
-                    </Link>
-                    <span className="whitespace-nowrap text-xs text-zinc-400 dark:text-zinc-600">
-                      {formatDate(session.startedAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section aria-label="Curiosity inbox" className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Curiosity inbox
-            </h2>
-
-            <form
-              action={addCuriosityItemAction}
-              className="flex items-center gap-2"
-            >
-              <input
-                name="text"
-                required
-                placeholder="Learn about Mixture of Experts..."
-                className="flex-1 rounded-lg border border-black/[.08] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-white/[.1] dark:bg-zinc-950 dark:text-zinc-100"
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-black/[.06] px-3 py-2 text-sm text-zinc-700 dark:bg-white/[.08] dark:text-zinc-200"
-              >
-                Add
-              </button>
-            </form>
-
-            {curiosityItems.length === 0 ? (
-              <p className="text-sm text-zinc-400 dark:text-zinc-600">
-                Nothing saved yet.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {curiosityItems.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-black/[.06] bg-white px-4 py-3 text-sm text-zinc-800 dark:border-white/[.08] dark:bg-zinc-950 dark:text-zinc-100"
-                  >
-                    <span>{item.text}</span>
-                    <span className="flex shrink-0 items-center gap-3 text-xs">
-                      <Link
-                        href={{
-                          pathname: "/sessions/new",
-                          query: { curiosityItemId: item.id, topic: item.text },
-                        }}
-                        className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-                      >
-                        Promote
+                        </div>
+                      </div>
+                      <Link href={`/sessions/${session.id}`} className="btn btn-line btn-sm shrink-0">
+                        Continue
                       </Link>
-                      <form action={resolveCuriosityItemAction}>
-                        <input type="hidden" name="id" value={item.id} />
-                        <button
-                          type="submit"
-                          className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-                        >
-                          Dismiss
-                        </button>
-                      </form>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
-          </section>
+
+            {pendingRecall && (
+              <section aria-label="Quick recall" className="sheet flex flex-col gap-5">
+                <p className="meta">Do you still remember this?</p>
+                <p className="question">{pendingRecall.attempt.prompt}</p>
+                <form action={submitRecallAnswerAction} className="flex flex-col gap-4">
+                  <input type="hidden" name="attemptId" value={pendingRecall.attempt.id} />
+                  <textarea
+                    name="response"
+                    rows={2}
+                    placeholder="Say what comes back, or just answer below"
+                    className="field"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button type="submit" name="outcome" value="remembered" className="btn btn-line btn-sm">
+                      I remember
+                    </button>
+                    <button type="submit" name="outcome" value="partial" className="btn btn-line btn-sm">
+                      Partly
+                    </button>
+                    <button type="submit" name="outcome" value="forgot" className="btn btn-line btn-sm">
+                      It&apos;s gone
+                    </button>
+                  </div>
+                </form>
+              </section>
+            )}
+          </div>
+
+          <aside aria-label="Capture" className="flex flex-col gap-6 lg:pt-1">
+            <h2 className="title text-[23px]">Something new</h2>
+            <CaptureForm returnTo="/" compact />
+            <p className="meta">
+              {waiting.length > 0 ? (
+                <>
+                  {waiting.join(" and ")} waiting in{" "}
+                  <Link href="/learn" className="link">
+                    Learn
+                  </Link>
+                  .
+                </>
+              ) : (
+                <>
+                  Nothing waiting. Whatever you keep here shows up in{" "}
+                  <Link href="/learn" className="link">
+                    Learn
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </aside>
         </div>
 
-        <footer className="mt-auto pt-6 text-center">
-          <a
-            href="/api/export"
-            className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
-          >
-            Export database backup
+        <footer className="mx-auto w-full max-w-6xl px-6 pb-10 sm:px-10">
+          <a href="/api/export" className="link link-soft text-[13px]">
+            Download a backup of everything
           </a>
         </footer>
       </main>

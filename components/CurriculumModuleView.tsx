@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExplainBackInput } from "@/components/ExplainBackInput";
 import { NavHeader } from "@/components/NavHeader";
+import { SubmitButton } from "@/components/SubmitButton";
 import { CURRICULUM_DIAGRAMS } from "@/components/curriculum/diagrams";
 import {
   markUnderstandCompleteAction,
@@ -17,53 +18,25 @@ import {
 import { type CurriculumLevel } from "@/lib/db/schema";
 
 const LEVEL_LABELS: Record<CurriculumLevel, string> = {
-  understand: "Understand",
+  understand: "Read",
   explain: "Explain",
   trace: "Trace",
   modify: "Modify",
   design: "Design",
 };
 
-const verdictStyle: Record<string, string> = {
-  solid: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  partial: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  off_track: "bg-black/[.04] text-zinc-500 dark:bg-white/[.08] dark:text-zinc-400",
+const VERDICT_WORD: Record<string, string> = {
+  solid: "This held.",
+  partial: "This partly held.",
+  off_track: "This went off track.",
 };
 
 function formatDate(iso: string) {
-  return new Date(iso.replace(" ", "T") + "Z").toLocaleString(undefined, {
-    month: "short",
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
+    month: "long",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
     timeZone: "America/Los_Angeles",
   });
-}
-
-function LevelTab({
-  href,
-  active,
-  attempted,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  attempted: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={
-        active
-          ? "rounded-full bg-zinc-900 px-3 py-1 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "rounded-full bg-black/[.04] px-3 py-1 text-xs text-zinc-600 dark:bg-white/[.08] dark:text-zinc-300"
-      }
-    >
-      {children}
-      {attempted && !active && <span className="ml-1 text-zinc-400 dark:text-zinc-500">·</span>}
-    </Link>
-  );
 }
 
 export async function CurriculumModuleView({
@@ -78,7 +51,7 @@ export async function CurriculumModuleView({
   const curriculumModule = getCurriculumModule(moduleSlug);
   if (!curriculumModule || curriculumModule.track !== track) notFound();
 
-  const { label, basePath } = CURRICULUM_TRACKS[track];
+  const { basePath } = CURRICULUM_TRACKS[track];
   const levels = availableLevels(curriculumModule);
   const latestByLevel = await getLatestAttempts(moduleSlug);
   const activeLevel: CurriculumLevel = levels.includes(levelParam as CurriculumLevel)
@@ -90,55 +63,41 @@ export async function CurriculumModuleView({
     activeLevel === "understand" ? [] : await getAttemptHistory(moduleSlug, activeLevel);
 
   return (
-    <div className="flex flex-1 flex-col bg-background font-sans">
+    <div className="flex flex-1 flex-col">
       <NavHeader
-        active={label}
+        active="Learn"
         right={
-          <Link
-            href={basePath}
-            className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-          >
+          <Link href={basePath} className="link link-soft text-sm">
             All modules
           </Link>
         }
       />
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-8 py-12">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-zinc-400 dark:text-zinc-600">{curriculumModule.phase}</span>
-          <h1 className="text-lg font-medium text-zinc-800 dark:text-zinc-100">
-            {curriculumModule.title}
-          </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{curriculumModule.summary}</p>
-        </div>
+      <main className="page-enter mx-auto flex w-full max-w-2xl flex-1 flex-col gap-12 px-6 py-14 sm:px-10">
+        <header className="flex flex-col gap-3">
+          <p className="meta">{curriculumModule.phase}</p>
+          <h1 className="title text-[34px] sm:text-[40px]">{curriculumModule.title}</h1>
+          <p className="reading text-[17px] text-ink-soft">{curriculumModule.summary}</p>
+        </header>
 
-        <section className="flex flex-col gap-5 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950">
-          <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-            {curriculumModule.lesson.overview}
-          </p>
+        <article className="flex flex-col gap-8">
+          <p className="reading whitespace-pre-wrap">{curriculumModule.lesson.overview}</p>
           {curriculumModule.lesson.diagramId &&
             CURRICULUM_DIAGRAMS[curriculumModule.lesson.diagramId]}
           {curriculumModule.lesson.sections.map((section) => (
-            <div key={section.heading} className="flex flex-col gap-1.5">
-              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                {section.heading}
-              </h2>
-              <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">
-                {section.body}
-              </p>
+            <div key={section.heading} className="flex flex-col gap-3">
+              <h2 className="title text-[23px]">{section.heading}</h2>
+              <p className="reading whitespace-pre-wrap">{section.body}</p>
             </div>
           ))}
           {curriculumModule.lesson.sourceFiles && curriculumModule.lesson.sourceFiles.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                {track === "noesis" ? "Source to read alongside this module" : "Reference"}
+            <div className="flex flex-col gap-2 border-t border-rule pt-6">
+              <span className="meta">
+                {track === "noesis" ? "Read the source alongside this" : "Reference"}
               </span>
-              <ul className="flex flex-wrap gap-2">
+              <ul className="flex flex-wrap gap-x-4 gap-y-1">
                 {curriculumModule.lesson.sourceFiles.map((file) => (
-                  <li
-                    key={file}
-                    className="rounded-full bg-black/[.04] px-2.5 py-1 font-mono text-xs text-zinc-500 dark:bg-white/[.08] dark:text-zinc-400"
-                  >
+                  <li key={file} className="font-mono text-[13px] text-ink-soft">
                     {file}
                   </li>
                 ))}
@@ -146,8 +105,8 @@ export async function CurriculumModuleView({
             </div>
           )}
           {curriculumModule.lesson.videos && curriculumModule.lesson.videos.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-zinc-400 dark:text-zinc-600">Related videos</span>
+            <div className="flex flex-col gap-2 border-t border-rule pt-6">
+              <span className="meta">Worth watching</span>
               <ul className="flex flex-col gap-1.5">
                 {curriculumModule.lesson.videos.map((video) => (
                   <li key={video.url}>
@@ -155,17 +114,8 @@ export async function CurriculumModuleView({
                       href={video.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-sky-600 hover:underline dark:text-sky-400"
+                      className="link font-serif text-[17px]"
                     >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="shrink-0"
-                      >
-                        <path d="M21.6 7.2s-.2-1.5-.8-2.2c-.8-.9-1.7-.9-2.1-1C15.9 3.8 12 3.8 12 3.8h0s-3.9 0-6.7.2c-.4 0-1.3.1-2.1 1-.6.7-.8 2.2-.8 2.2S2.2 9 2.2 10.7v1.5C2.2 14 2.4 15.7 2.4 15.7s.2 1.5.8 2.2c.8.9 1.9.9 2.4 1 1.7.2 7.4.2 7.4.2s3.9 0 6.7-.2c.4 0 1.3-.1 2.1-1 .6-.7.8-2.2.8-2.2s.2-1.7.2-3.5v-1.5c0-1.7-.2-3.5-.2-3.5zM9.9 14.6V8.4l5.4 3.1-5.4 3.1z" />
-                      </svg>
                       {video.title}
                     </a>
                   </li>
@@ -173,124 +123,106 @@ export async function CurriculumModuleView({
               </ul>
             </div>
           )}
-        </section>
+        </article>
 
-        <div className="flex flex-wrap gap-2">
+        <nav aria-label="Levels" className="flex flex-wrap gap-5 border-t border-rule pt-6">
           {levels.map((level) => (
-            <LevelTab
+            <Link
               key={level}
               href={`${basePath}/${moduleSlug}?level=${level}`}
-              active={level === activeLevel}
-              attempted={latestByLevel.has(level)}
+              className={level === activeLevel ? "choice choice-active" : "choice"}
+              aria-current={level === activeLevel ? "page" : undefined}
             >
               {LEVEL_LABELS[level]}
-            </LevelTab>
+              {latestByLevel.has(level) && level !== activeLevel && (
+                <span className="ml-1 text-ink-soft" aria-label="attempted">
+                  ·
+                </span>
+              )}
+            </Link>
           ))}
-        </div>
+        </nav>
 
         {activeLevel === "understand" ? (
-          <div className="flex flex-col gap-3 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950">
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">
-              Read the lesson above, then mark it as read to move on to explaining it back
-              in your own words.
+          <section className="sheet flex flex-col gap-5">
+            <p className="reading text-[17px]">
+              Read the lesson above. When it has settled, mark it read and move on to
+              explaining it in your own words.
             </p>
             {latestForActiveLevel ? (
-              <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-700 dark:text-emerald-400">
-                Marked as read
-              </span>
+              <span className="meta text-ink">Marked as read.</span>
             ) : (
               <form action={markUnderstandCompleteAction}>
                 <input type="hidden" name="moduleSlug" value={moduleSlug} />
-                <button
-                  type="submit"
-                  className="w-fit rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                >
+                <button type="submit" className="btn btn-ink">
                   Mark as read
                 </button>
               </form>
             )}
-          </div>
+          </section>
         ) : (
-          <div className="flex flex-col gap-6">
-            <form
-              action={submitCurriculumResponseAction}
-              className="flex flex-col gap-3 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950"
-            >
+          <div className="flex flex-col gap-12">
+            <form action={submitCurriculumResponseAction} className="sheet flex flex-col gap-5">
               <input type="hidden" name="moduleSlug" value={moduleSlug} />
               <input type="hidden" name="level" value={activeLevel} />
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                  {curriculumModule.levels[activeLevel]?.prompt}
-                </span>
-                <span className="text-xs text-zinc-400 dark:text-zinc-600">
+              <div className="flex flex-col gap-2">
+                <p className="question">{curriculumModule.levels[activeLevel]?.prompt}</p>
+                <p className="meta">
                   {track === "noesis"
-                    ? "Answers here are compared against how the code actually works, not against a generic definition — retries are expected and encouraged."
-                    : "Answers here are graded against the lesson above — retries are expected and encouraged."}
-                </span>
-              </label>
+                    ? "Compared against how the code actually works, not a generic definition. Trying again is expected."
+                    : "Compared against the lesson above. Trying again is expected."}
+                </p>
+              </div>
               <ExplainBackInput />
               <div>
-                <button
-                  type="submit"
-                  className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                >
-                  {latestForActiveLevel ? "Try again" : "Submit response"}
-                </button>
+                <SubmitButton pendingLabel="Reading your answer…">
+                  {latestForActiveLevel ? "Try again" : "Save answer"}
+                </SubmitButton>
               </div>
             </form>
 
-            {attemptHistory.map((attempt) => (
-              <div
+            {attemptHistory.map((attempt, i) => (
+              <section
                 key={attempt.id}
-                className="flex flex-col gap-4 rounded-2xl border border-black/[.06] bg-white p-6 dark:border-white/[.08] dark:bg-zinc-950"
+                className="flex flex-col gap-6 border-t border-rule pt-8"
+                aria-label={`Attempt from ${formatDate(attempt.createdAt)}`}
               >
-                <div className="flex items-center justify-between gap-4">
-                  {attempt.verdict && (
-                    <span
-                      className={`w-fit rounded-full px-2.5 py-1 text-xs ${verdictStyle[attempt.verdict]}`}
-                    >
-                      {attempt.verdict.replace("_", " ")}
-                    </span>
-                  )}
-                  <span className="text-xs text-zinc-400 dark:text-zinc-600">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="font-serif text-[19px]">
+                    {attempt.verdict ? VERDICT_WORD[attempt.verdict] : "Attempt"}
+                  </span>
+                  <span className="meta shrink-0">
                     {formatDate(attempt.createdAt)}
+                    {i === 0 ? ", latest" : ""}
                   </span>
                 </div>
 
-                <div>
-                  <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                    Your response
-                  </span>
-                  <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                    {attempt.userResponse}
-                  </p>
+                <div className="flex flex-col gap-2">
+                  <span className="meta">What you wrote</span>
+                  <p className="reading whitespace-pre-wrap text-[17px]">{attempt.userResponse}</p>
                 </div>
 
                 {attempt.whatYouGotRight.length > 0 && (
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                      What you got right
-                    </span>
-                    <ul className="list-inside list-disc text-sm text-zinc-600 dark:text-zinc-300">
-                      {attempt.whatYouGotRight.map((item, i) => (
-                        <li key={i}>{item}</li>
+                  <div className="flex flex-col gap-2">
+                    <span className="meta">What held</span>
+                    <ul className="flex flex-col gap-1.5">
+                      {attempt.whatYouGotRight.map((item, j) => (
+                        <li key={j} className="text-[15px] leading-relaxed">
+                          {item}
+                        </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
                 {attempt.misconceptions.length > 0 && (
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">
-                      Misconceptions
-                    </span>
-                    <ul className="flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      {attempt.misconceptions.map((m, i) => (
-                        <li key={i} className="list-inside list-disc">
+                  <div className="flex flex-col gap-2">
+                    <span className="meta">Worth correcting</span>
+                    <ul className="flex flex-col gap-3">
+                      {attempt.misconceptions.map((m, j) => (
+                        <li key={j} className="text-[15px] leading-relaxed">
                           {m.description}
-                          <span className="block pl-4 text-zinc-400 dark:text-zinc-500">
-                            → {m.correction}
-                          </span>
+                          <span className="block text-ink-soft">{m.correction}</span>
                         </li>
                       ))}
                     </ul>
@@ -298,22 +230,22 @@ export async function CurriculumModuleView({
                 )}
 
                 {attempt.gaps.length > 0 && (
-                  <div>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-600">Gaps</span>
-                    <ul className="list-inside list-disc text-sm text-zinc-600 dark:text-zinc-300">
-                      {attempt.gaps.map((gap, i) => (
-                        <li key={i}>{gap}</li>
+                  <div className="flex flex-col gap-2">
+                    <span className="meta">What you left out</span>
+                    <ul className="flex flex-col gap-1.5">
+                      {attempt.gaps.map((gap, j) => (
+                        <li key={j} className="text-[15px] leading-relaxed">
+                          {gap}
+                        </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
                 {attempt.followUpQuestion && (
-                  <div className="rounded-xl bg-black/[.03] p-4 text-sm text-zinc-700 dark:bg-white/[.06] dark:text-zinc-200">
-                    {attempt.followUpQuestion}
-                  </div>
+                  <p className="question">{attempt.followUpQuestion}</p>
                 )}
-              </div>
+              </section>
             ))}
           </div>
         )}

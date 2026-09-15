@@ -5,78 +5,100 @@ import type {
   ResourceType,
 } from "@/lib/db/schema";
 
-// Shared color language for the small categorical pills used across
-// Sessions/Concepts pages, so the same value always reads the same color
-// no matter where it shows up.
+// In the Survey design language, state is a word, not a colored chip.
+// Color belongs to the Mindscape's field hues and to nothing administrative.
+// These maps are kept so every screen phrases the same value the same way;
+// the styles are deliberately quiet and identical.
+
+const QUIET = "text-ink-soft";
 
 export const SESSION_STATUS_STYLE: Record<LearningSessionStatus, string> = {
-  pending: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  started: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  completed: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  pending: QUIET,
+  started: "text-ink",
+  completed: QUIET,
 };
 
 export const SESSION_STATUS_LABEL: Record<LearningSessionStatus, string> = {
-  pending: "Pending",
-  started: "Started",
-  completed: "Completed",
+  pending: "Kept for later",
+  started: "In progress",
+  completed: "Explained",
+};
+
+export const ENVIRONMENT_MODE_LABEL: Record<EnvironmentMode, string> = {
+  listen: "listening",
+  focus: "focused",
+};
+
+export const ACTIVITY_MODE_LABEL: Record<ActivityMode, string> = {
+  consume: "taking in",
+  practice: "practising",
 };
 
 export const ENVIRONMENT_MODE_STYLE: Record<EnvironmentMode, string> = {
-  listen: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-  focus: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  listen: QUIET,
+  focus: QUIET,
 };
 
 export const ACTIVITY_MODE_STYLE: Record<ActivityMode, string> = {
-  consume: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-  practice: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  consume: QUIET,
+  practice: QUIET,
 };
 
 export const RESOURCE_TYPE_STYLE: Record<ResourceType, string> = {
-  youtube: "bg-red-500/10 text-red-700 dark:text-red-400",
-  article: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  podcast: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
-  webinar: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  notebooklm: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
-  chatgpt: "bg-green-500/10 text-green-700 dark:text-green-400",
-  paper: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
-  doc: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
-  book: "bg-lime-600/10 text-lime-700 dark:text-lime-400",
-  website: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  other: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+  youtube: QUIET,
+  article: QUIET,
+  podcast: QUIET,
+  webinar: QUIET,
+  notebooklm: QUIET,
+  chatgpt: QUIET,
+  paper: QUIET,
+  doc: QUIET,
+  book: QUIET,
+  website: QUIET,
+  other: QUIET,
 };
 
-export const CONCEPT_TAG_STYLE =
-  "bg-violet-500/10 text-violet-700 dark:text-violet-400";
+export const CONCEPT_TAG_STYLE = "text-ink";
 
-// Matches Mindscape.tsx's nodeClassName color choices for the same labels,
-// so a concept's mastery color means the same thing everywhere it appears.
 export const CONCEPT_STATUS_LABEL_STYLE: Record<string, string> = {
-  Retained: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  "Can Explain": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  Familiar: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  Encountered: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+  Retained: "text-ink",
+  "Can Explain": "text-ink",
+  Familiar: QUIET,
+  Encountered: QUIET,
 };
 
 export const EXPLAIN_BACK_STATUS_STYLE: Record<string, string> = {
-  correct: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  partial: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  missing: "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400",
+  correct: "text-ink",
+  partial: QUIET,
+  missing: QUIET,
+};
+
+export const EXPLAIN_BACK_STATUS_LABEL: Record<string, string> = {
+  correct: "explained",
+  partial: "partly explained",
+  missing: "left out",
 };
 
 export const UNDERSTANDING_DEPTH_STYLE: Record<string, string> = {
-  surface: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
-  solid: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
-  deep: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  surface: QUIET,
+  solid: QUIET,
+  deep: QUIET,
 };
 
 export const UNDERSTANDING_CLARITY_STYLE: Record<string, string> = {
-  unclear: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
-  reasonable: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
-  very_clear: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  unclear: QUIET,
+  reasonable: QUIET,
+  very_clear: QUIET,
 };
 
 export const RECALL_OUTCOME_STYLE: Record<string, string> = {
-  remembered: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  partial: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  forgot: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  remembered: "text-ink",
+  partial: QUIET,
+  forgot: QUIET,
+};
+
+export const RECALL_OUTCOME_LABEL: Record<string, string> = {
+  remembered: "remembered",
+  partial: "half remembered",
+  forgot: "drew a blank",
 };
