@@ -259,7 +259,7 @@ export default async function HistoryPage({
                         href={`/sessions/${session.id}/edit`}
                         aria-label={`Edit ${session.title}`}
                         title="Edit"
-                        className="flex h-7 w-7 items-center justify-center text-ink-soft transition-colors hover:text-ink"
+                        className="flex h-11 w-11 items-center justify-center text-ink-soft transition-colors hover:text-ink"
                       >
                         <svg
                           viewBox="0 0 24 24"

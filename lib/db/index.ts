@@ -27,12 +27,16 @@ async function createDb(): Promise<Db> {
     authToken: process.env.TURSO_AUTH_TOKEN,
   });
   const db = drizzle(client, { schema });
-  // Convenient for local dev (embedded file, effectively instant). In
-  // production this re-runs on every cold start against Turso — harmless
-  // since each migration is idempotent/tracked, but for a busier deployment
-  // prefer running `drizzle-kit migrate` as a deploy step instead and
-  // dropping this call.
-  await migrate(db, { migrationsFolder: path.resolve(process.cwd(), "drizzle") });
+  // Convenient for local dev (embedded file, effectively instant): every
+  // request runs on the same long-lived process, so this only ever migrates
+  // once. Against Turso this is a real network round trip that would rerun
+  // on every cold serverless invocation — each Next.js route is its own
+  // Vercel function, so on a low-traffic deploy this was firing on nearly
+  // every navigation. `npm run db:migrate` (wired into `vercel-build`) now
+  // does this once at deploy time instead.
+  if (!process.env.TURSO_DATABASE_URL) {
+    await migrate(db, { migrationsFolder: path.resolve(process.cwd(), "drizzle") });
+  }
   return db;
 }
 
