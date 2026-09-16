@@ -19,7 +19,7 @@ export function MobileNavMenu({
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:text-ink"
+        className="flex h-11 w-11 items-center justify-center rounded-full text-ink-soft hover:text-ink"
       >
         <svg
           viewBox="0 0 24 24"
@@ -54,7 +54,7 @@ export function MobileNavMenu({
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Close menu"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:text-ink"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-ink-soft hover:text-ink"
           >
             <svg
               viewBox="0 0 24 24"

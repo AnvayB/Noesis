@@ -27,7 +27,7 @@ export function DeleteSessionButton({
         title="Delete"
         className={
           className ??
-          "flex h-7 w-7 items-center justify-center text-ink-soft transition-colors hover:text-rose"
+          "flex h-11 w-11 items-center justify-center text-ink-soft transition-colors hover:text-rose"
         }
       >
         <svg
