@@ -9,6 +9,7 @@ export const explainBackAnalysisSchema = z.object({
   conceptsAddressed: z.array(
     z.object({
       concept: z.string(),
+      field: z.string(),
       status: z.enum(["correct", "partial", "missing"]),
     }),
   ),
@@ -28,7 +29,11 @@ export const explainBackAnalysisSchema = z.object({
       description: z.string(),
     }),
   ),
+  relatedKnown: z.array(z.string()),
   followUpQuestion: z.string().nullable(),
+  gist: z.string(),
+  level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  nextStep: z.string(),
 });
 
 export const recallQuestionSchema = z.object({
@@ -42,6 +47,7 @@ export const speakingPromptSchema = z.object({
 
 export const topicSuggestionSchema = z.object({
   topic: z.string(),
+  field: z.string(),
 });
 
 export const architectureResponseAnalysisSchema = z.object({

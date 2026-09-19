@@ -10,22 +10,43 @@ export interface ExplainBackInput {
   priorKnownConcepts: string[];
   /** The user's own explanation, verbatim */
   explanationText: string;
+  /** Fields already on the map, so new concepts are filed with their neighbours. */
+  knownFields: string[];
+  /** The readable body of the source, when it was an article, so omissions
+   * are judged against what the material actually said. Trimmed. */
+  sourceExcerpt: string | null;
+  /** The learner's own marks made while watching or reading, if any. */
+  marks: string | null;
+  /** Title of the source, for context. */
+  sourceTitle: string | null;
 }
 
 export type ConceptAddressedStatus = "correct" | "partial" | "missing";
 
 export interface ExplainBackAnalysis {
-  conceptsAddressed: { concept: string; status: ConceptAddressedStatus }[];
+  conceptsAddressed: { concept: string; field: string; status: ConceptAddressedStatus }[];
   misconceptions: { description: string; concept: string | null }[];
   omissions: string[];
   depth: "surface" | "solid" | "deep";
   clarity: "unclear" | "reasonable" | "very_clear";
   connectionsMade: { from: string; to: string; description: string }[];
+  /** Prior known concepts the material plainly relates to, whether or not
+   * the learner said so. Steers growth on the map; never fuses. */
+  relatedKnown: string[];
   followUpQuestion: string | null;
+  /** One sentence, in the learner's terms, of what the explanation amounted to. */
+  gist: string;
+  /** 1 heard of it, 2 can follow it, 3 can explain the main idea, 4 can
+   * explain it with its edges and reasons, 5 could teach it and apply it. */
+  level: 1 | 2 | 3 | 4 | 5;
+  /** What would move the learner one step up the ladder, concretely. */
+  nextStep: string;
 }
 
 export interface RecallContext {
   conceptName: string;
+  /** The field it belongs to, so the question is about the right thing. */
+  field: string | null;
   lastUnderstandingSummary: string | null;
   daysSinceReviewed: number;
 }
@@ -68,6 +89,8 @@ export interface SpeakingPromptSuggestion {
 
 export interface TopicSuggestionContext {
   title: string;
+  /** Fields already on the map, most recently used first. Reuse one when it fits. */
+  existingFields: string[];
   /** Names of concepts already in the knowledge landscape, most recently
    * encountered first — reuse one of these verbatim when it's a real match,
    * so similar sessions collapse onto the same Concept instead of spawning
@@ -77,6 +100,8 @@ export interface TopicSuggestionContext {
 
 export interface TopicSuggestion {
   topic: string;
+  /** The broad field the topic belongs to, e.g. "Machine learning". */
+  field: string;
 }
 
 // Learn Noesis — grading for the four response-based curriculum levels

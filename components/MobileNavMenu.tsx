@@ -5,9 +5,11 @@ import Link from "next/link";
 
 export function MobileNavMenu({
   items,
+  secondary = [],
   active,
 }: {
   items: readonly { href: string; label: string }[];
+  secondary?: readonly { href: string; label: string }[];
   active?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -87,6 +89,21 @@ export function MobileNavMenu({
             </li>
           ))}
         </ul>
+        {secondary.length > 0 && (
+          <ul className="mt-8 flex flex-col gap-4 border-t border-rule pt-6">
+            {secondary.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="text-[15px] text-ink-soft hover:text-ink"
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

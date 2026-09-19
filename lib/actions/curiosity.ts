@@ -1,7 +1,7 @@
 "use server";
 
 import { eq, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 import { getDb } from "@/lib/db";
 import { curiosityItems } from "@/lib/db/schema";
 

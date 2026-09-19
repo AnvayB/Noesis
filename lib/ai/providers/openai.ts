@@ -54,32 +54,62 @@ export class OpenAIProvider implements AIProvider {
         {
           role: "system",
           content:
-            "You evaluate a learner's own explanation of concepts they just studied. " +
-            "Be specific and evidence-based. Never produce a single numeric score — " +
-            "report structured qualitative findings only.\n\n" +
+            "You read a learner's own explanation of something they just studied, " +
+            "and you say what it shows. Be specific and evidence-based. Never produce " +
+            "a numeric score; report structured qualitative findings only. Judge " +
+            "omissions against the source material when it is given, and against " +
+            "general knowledge of the topic otherwise. Do not penalise the learner for " +
+            "leaving out things the material did not cover.\n\n" +
             "Your output feeds a persistent map of what the learner knows, so naming " +
             "discipline matters more than precision.\n\n" +
-            "conceptsAddressed: every concept the learner substantively explains, " +
-            "including ones beyond the session concept, each with a status. A concept " +
-            "name is a short noun phrase of one to three words, as it would appear as a " +
-            "textbook index entry: 'Softmax', 'Vanishing gradients', 'Scaled dot-product " +
-            "attention'. Never 'X rationale', 'X explanation', or a clause. If a prior " +
-            "known concept name means the same thing, reuse it exactly.\n\n" +
-            "connectionsMade: relationships the learner drew between concepts. Both " +
-            "'from' and 'to' must be names that appear in conceptsAddressed or in the " +
-            "prior known concepts, spelled identically. If you want to connect to " +
+            "conceptsAddressed: the concepts the learner substantively explains, " +
+            "including ones beyond the session concept, each with a status and a field. " +
+            "Be sparing: two to five, and only what was actually explained. A term " +
+            "merely mentioned in passing is not addressed and must not appear. " +
+            "A concept name is a short noun phrase of one to three words, as it would " +
+            "appear as a textbook index entry: 'Softmax', 'Vanishing gradients', 'Sourdough " +
+            "hydration'. Never 'X rationale', 'X explanation', or a clause. If a prior " +
+            "known concept name means the same thing, reuse it exactly. A field is the " +
+            "broad area the concept belongs to, one to three words in sentence case " +
+            "('Machine learning', 'Baking', 'Roman history'); reuse a known field when " +
+            "it fits, and keep fields broad: a person's map should have a handful of " +
+            "fields, not one per session.\n\n" +
+            "connectionsMade: relationships the learner drew, in their own words, " +
+            "between concepts. Only include a connection the learner actually stated. " +
+            "Both 'from' and 'to' must be names that appear in conceptsAddressed or in " +
+            "the prior known concepts, spelled identically. If you want to connect to " +
             "something, add it to conceptsAddressed first.\n\n" +
-            "omissions: important points about the session concept that the learner " +
-            "did not cover, each written as a short sentence describing the point, " +
-            "never a bare concept name.\n\n" +
+            "relatedKnown: prior known concepts that this material plainly relates to " +
+            "even though the learner did not say so. Names only, spelled identically. " +
+            "Empty if none.\n\n" +
+            "omissions: important points the learner did not cover, each a short " +
+            "sentence describing the point, never a bare concept name. At most four.\n\n" +
+            "misconceptions: things stated that are wrong, with the concept they concern.\n\n" +
+            "gist: one sentence, in the learner's own terms and register, of what this " +
+            "explanation amounted to. Not praise. Something they could read back in a " +
+            "month and recognise.\n\n" +
             "followUpQuestion: one question the learner could go and find out next, " +
-            "phrased as something to wonder about rather than a test.",
+            "phrased as something to wonder about rather than a test.\n\n" +
+            "level: where the explanation lands on a five-step ladder for the session's " +
+            "main concept. 1: has heard of it and can say roughly what it is. 2: can " +
+            "follow it and restate the main idea loosely. 3: can explain the main idea " +
+            "correctly in their own words. 4: can explain it with its reasons, edge " +
+            "cases, and how it relates to neighbouring ideas. 5: could teach it and " +
+            "apply it to a new situation. A first explanation can land anywhere on the " +
+            "ladder; judge the explanation, not the number of sessions.\n\n" +
+            "nextStep: one concrete thing that would move them one step up the ladder: " +
+            "a question to answer, a case to work through, a distinction to draw. One " +
+            "sentence.",
         },
         {
           role: "user",
           content: JSON.stringify({
             sessionConcepts: input.sessionConcepts,
+            sourceTitle: input.sourceTitle,
             priorKnownConcepts: input.priorKnownConcepts,
+            knownFields: input.knownFields,
+            sourceExcerpt: input.sourceExcerpt,
+            learnerMarks: input.marks,
             explanation: input.explanationText,
           }),
         },
@@ -105,13 +135,15 @@ export class OpenAIProvider implements AIProvider {
           role: "system",
           content:
             "You write a single casual, low-stakes recall question about a concept the " +
-            "learner studied a while ago. Tone: 'quick one — do you remember why...', " +
-            "never a formal quiz. Keep it to one sentence.",
+            "learner studied a while ago. The concept belongs to the given field; ask " +
+            "about it in that sense. Tone: 'quick one — do you remember why...', never " +
+            "a formal quiz. Keep it to one sentence.",
         },
         {
           role: "user",
           content: JSON.stringify({
             concept: input.conceptName,
+            field: input.field,
             lastUnderstandingSummary: input.lastUnderstandingSummary,
             daysSinceReviewed: input.daysSinceReviewed,
           }),
@@ -195,19 +227,23 @@ export class OpenAIProvider implements AIProvider {
         {
           role: "system",
           content:
-            "You infer a short topic name for a piece of learning material from its title, " +
-            "so similar sessions collapse under the same category. If existing_topics " +
-            "contains one that the title is clearly about, return that exact string " +
-            "(same spelling/casing) — do not invent a near-duplicate. Otherwise propose a " +
-            "new concise topic (1-3 words, Title Case, e.g. 'Attention', 'Mixture of " +
-            "Experts') general enough that future related sessions could reuse it too, " +
-            "not a restatement of the whole title.",
+            "You infer a short topic name and a broad field for a piece of learning " +
+            "material from its title, so similar sessions collapse under the same " +
+            "concept. If existingTopics contains one that the title is clearly about, " +
+            "return that exact string (same spelling/casing); do not invent a " +
+            "near-duplicate. Otherwise propose a new concise topic (1-3 words, sentence " +
+            "case, e.g. 'Attention', 'Sourdough starters') general enough that future " +
+            "related sessions could reuse it too, not a restatement of the whole title. " +
+            "The field is the broad area it belongs to (1-3 words, sentence case, e.g. " +
+            "'Machine learning', 'Baking', 'Roman history'). Reuse an existing field " +
+            "whenever it fits; a person's map should have a handful of fields.",
         },
         {
           role: "user",
           content: JSON.stringify({
             title: input.title,
             existingTopics: input.existingTopics,
+            existingFields: input.existingFields,
           }),
         },
       ],

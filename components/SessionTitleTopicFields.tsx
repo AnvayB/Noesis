@@ -1,26 +1,15 @@
-"use client";
-
-import { useState, useTransition } from "react";
-import { suggestTopicAction } from "@/lib/actions/topic";
-
+// Title, concept, and field for the detailed form. The concept and field are
+// suggested by the model on submit when left blank, so nothing here waits
+// on a network call while you type.
 export function SessionTitleTopicFields({
-  defaultTopic,
+  defaultTitle = "",
+  defaultTopic = "",
+  defaultField = "",
 }: {
-  defaultTopic: string;
+  defaultTitle?: string;
+  defaultTopic?: string;
+  defaultField?: string;
 }) {
-  const [topic, setTopic] = useState(defaultTopic);
-  const [isPending, startTransition] = useTransition();
-
-  function handleTitleBlur(e: React.FocusEvent<HTMLInputElement>) {
-    const title = e.target.value.trim();
-    if (!title || topic.trim()) return;
-
-    startTransition(async () => {
-      const result = await suggestTopicAction(title);
-      if ("topic" in result) setTopic(result.topic);
-    });
-  }
-
   return (
     <>
       <label className="flex flex-col gap-1">
@@ -28,28 +17,39 @@ export function SessionTitleTopicFields({
         <input
           name="title"
           required
+          autoFocus
+          defaultValue={defaultTitle}
           placeholder="Attention, from scratch"
-          onBlur={handleTitleBlur}
           className="field font-serif text-[22px] leading-snug"
+          autoComplete="off"
         />
       </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="meta">Concept it belongs to</span>
-        <input
-          name="topic"
-          required
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="Attention"
-          className="field"
-        />
-        <span className="meta" aria-live="polite">
-          {isPending
-            ? "Suggesting one from the title…"
-            : "Where this lands on your map. Suggested from the title; change it if it's wrong."}
-        </span>
-      </label>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="meta">Concept it belongs to</span>
+          <input
+            name="topic"
+            defaultValue={defaultTopic}
+            placeholder="Suggested if left blank"
+            className="field"
+            autoComplete="off"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="meta">Field</span>
+          <input
+            name="field"
+            defaultValue={defaultField}
+            placeholder="Machine learning, Baking…"
+            className="field"
+            autoComplete="off"
+          />
+        </label>
+      </div>
+      <p className="meta -mt-3">
+        The concept is where this lands on your map; the field is the region it grows in. Both
+        can be left for the model to suggest.
+      </p>
     </>
   );
 }

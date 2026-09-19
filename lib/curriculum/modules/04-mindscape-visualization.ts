@@ -6,59 +6,60 @@ export const mindscapeVisualization: CurriculumModule = {
   phase: "Phase 3 — Knowledge & Memory",
   title: "Mindscape Visualization",
   summary:
-    "How the concept graph becomes a force-directed SVG 'landscape' that stays visually stable across visits, and the physics behind it.",
+    "The Settling Ground grammar: a deterministic, canvas-drawn landscape where explaining grows living threads and retention settles them into permanent ground — no force simulation, no node-edge graph.",
   lesson: {
     overview:
-      "Mindscape (components/Mindscape.tsx) turns the concepts/conceptRelations tables into an SVG force-directed graph: node size and color encode understanding depth, opacity encodes recency, edge thickness encodes relation strength. It's the one place in the app where a fairly deep piece of applied physics (force simulation) is doing real product work — communicating the shape of what you know at a glance.",
+      "Mindscape used to be a d3-force node/link graph. It is now a from-scratch generative system, Settling Ground (docs/mindscape/visual-grammar.md): concepts are never drawn as circles, and relations are never drawn as lines. Instead, lib/mindscape/engine.ts (buildMindscape) turns a knowledge state into thread segments that space-colonize outward from each concept, fuse into cords where the learner made a connection, and settle into a contoured heightfield once a concept is retained. lib/mindscape/draw.ts renders that model onto a canvas 2D context, and components/Mindscape.tsx wires it to the DOM (pan, zoom, hover, the growth reveal after explaining).",
     sections: [
       {
-        heading: "From query rows to a settled layout",
+        heading: "From knowledge state to a model, deterministically",
         body:
-          "app/mindscape/page.tsx calls listMindscapeConcepts() and listMindscapeRelations() (lib/queries.ts) — the same status-derivation logic from the Knowledge Model module, reused here rather than duplicated. Mindscape.tsx turns those into d3-force node/link objects inside a useMemo, seeds any concept without a saved layoutX/layoutY at a pseudo-random position near center, then runs forceSimulation(...).stop() followed by simulation.tick(200) — advancing the physics synchronously to a settled state in one shot, rather than animating tick-by-tick in the browser. That's a deliberate choice: a live, jittering simulation reads as 'busy'; a graph that's already settled when it appears reads as a calm, stable landscape.",
+          "lib/knowledge.ts derives a KnowledgeState (concepts with their explanation history, recalls, misconceptions, open questions; relations with a source of explained/llm_inferred/manual) from the raw tables in one pass — the same standing rule (Encountered/Familiar/Can Explain/Retained) used to be scattered across lib/queries.ts and now lives in one function, deriveStanding. buildMindscape(state, seed) is a pure function with no randomness: every concept's position comes from hashing its id together with a personal seed (mulberry32), so adding a concept never moves the others, and every organic detail — branch curl, hill shape, contour relief — comes from a seeded value-noise field sampled at that fixed position. Two calls with the same input produce byte-identical output; this is checked directly (see the engine's own determinism check, not a UI test).",
       },
       {
-        heading: "Encoding understanding visually",
+        heading: "Growth, fusion, and settling",
         body:
-          "radiusFor and nodeClassName map a concept's derived statusLabel to size and fill/stroke color (bigger and more saturated the deeper the understanding — 'Retained' concepts get both the largest radius and a distinctly thicker stroke). opacityFor maps days-since-last-review to fade: Math.max(0.35, 1 - days / 60), so untouched knowledge visibly fades but never disappears. Edge stroke width is Math.min(1 + strength * 0.6, 4) — capped, so one extremely reinforced relation doesn't visually dominate the whole graph. None of this is computed by an LLM; it's pure deterministic mapping from the derived status/recency data covered in the previous module.",
+          "A concept only ever encountered gets a four-segment spore and nothing else. Each explanation releases a growth budget proportional to its depth (surface/solid/deep) and status (correct/partial/missing); free tips space-colonize outward with branching that decays by generation, while tips launched toward a related concept steer via chemotropism and, only when the relation's source is 'explained' (the learner said it in their own words), fuse into a thickened cord with a bloom mark — llm_inferred relations steer growth but never fuse, so the rarest and most rewarding mark on the map is unforgeable. Once a concept's derived standing reaches Retained (a remembered recall, or two correct explanations two weeks apart), its threads fade toward the paper over ~4 weeks while a Gaussian deposit — anisotropic per-hill via noise, so no two hills are circles — raises a heightfield beneath it; cords between retained concepts become ridges, and a cross-field cord becomes a saddle pass. The heightfield is contoured by marching squares and only ever added to.",
       },
       {
-        heading: "The theory: force-directed layout, and SSR determinism",
+        heading: "Rendering: two canvases, not SVG",
         body:
-          "d3-force is a general-purpose physics simulator, not graph-specific: forceManyBody applies a charge (here, negative — repulsion, so nodes spread apart), forceLink acts like springs pulling connected nodes together at a target distance, forceCenter pulls everything toward a center point so the whole thing doesn't drift off-screen, and forceCollide prevents circles from overlapping. Running these forces together and letting them settle is exactly how most 'network graph' visualizations you've seen elsewhere are built (this is the same technique behind tools like Obsidian's graph view). \n\n" +
-          "Separately, there's a subtler general lesson in pseudoRandom() and the rounding in opacityFor: Next.js renders once on the server and again on the client during hydration, and if any value used in JSX differs between those two passes (e.g. real Math.random(), or an un-rounded Date.now()-based float), React throws a hydration mismatch. The fixes here — a deterministic hash-based pseudo-random seeded by concept id, and rounding opacity to two decimal places — are a general pattern for keeping any 'looks random but must render identically twice' value SSR-safe.",
+          "components/Mindscape.tsx keeps a still base canvas (ground image + contours + all settled/unsettled threads, repainted only when the model, theme, or view changes) and a live overlay canvas animated on requestAnimationFrame for exactly two things: the breathing glow on tips touched in the last fortnight, and the reveal animation after an explanation, which grows only the newly-touched concepts' threads in front of the reader over ~2 seconds by filtering segments on their recorded growth order. The ground is painted once into an offscreen canvas at low resolution (the model's internal grid, ~140²) and scaled up with image smoothing, which is why it reads as soft terrain rather than a heatmap. Pan/zoom is a plain 2D affine transform (scale, tx, ty) computed in JS, clamped in lib/mindscape/draw.ts so the view can never scale or pan into obvious empty space — no library, because the model is authored in world units already.",
       },
     ],
     sourceFiles: [
+      "lib/mindscape/engine.ts",
+      "lib/mindscape/draw.ts",
       "components/Mindscape.tsx",
-      "app/mindscape/page.tsx",
-      "lib/queries.ts",
-      "lib/actions/mindscape.ts",
+      "lib/knowledge.ts",
+      "docs/mindscape/visual-grammar.md",
+      "docs/mindscape/semantic-mapping.md",
     ],
   },
   levels: {
     explain: {
       prompt:
-        "Explain, in your own words, what visual properties encode what data in Mindscape, and why the simulation is advanced synchronously instead of animated live.",
+        "Explain, in your own words, what determines whether an explanation's growth becomes a longer thread versus a thicker one, and what has to be true for two concepts' threads to fuse into a cord.",
       groundTruth:
-        "Node radius and fill/stroke color encode the derived understanding status label (bigger/more saturated = deeper, e.g. 'Retained' is largest with a thick stroke); node opacity encodes recency (fades toward 0.35 as days since last review/encounter grows, via opacityFor); edge stroke width encodes conceptRelations.strength, capped at 4. The simulation calls .stop() then .tick(200) synchronously rather than letting the browser animate it frame-by-frame, so the graph appears already settled — a calm 'landscape' feel rather than a bouncy live physics demo.",
+        "The first explanation of a concept spends its budget on extension — new tips space-colonizing outward, more of them and living longer the deeper the explanation. Every later explanation of the same concept thickens the existing segments first (up to a cap) before spending any leftover budget on new growth, which is how depth outgrows breadth without a separate 'revisit' channel. Two concepts' threads fuse into a cord only when a tip was launched toward a relation whose source is 'explained' — meaning the learner stated the connection in their own words during an explain-back. A relation the model merely inferred (llm_inferred) still steers a tip's direction via chemotropism, so it shapes the grain of a region, but the tip is never marked to fuse and no bloom appears.",
     },
     trace: {
       prompt:
-        "Trace what happens from visiting /mindscape to seeing settled node positions on screen, including how those positions get remembered for next time.",
+        "Trace what happens from submitting an explanation to seeing the Mindscape change on the session page, including how the grown concepts are singled out.",
       groundTruth:
-        "app/mindscape/page.tsx (a Server Component) calls listMindscapeConcepts() and listMindscapeRelations() from lib/queries.ts, passing the results as props into the client component <Mindscape>. Inside Mindscape.tsx, a useMemo builds Node/Link objects (seeding x/y from saved layoutX/layoutY if present, otherwise a pseudo-random scatter), runs forceSimulation(...).tick(200), and returns the settled {nodes, links}. A separate useEffect fires after that memo changes, calling saveConceptLayoutAction (lib/actions/mindscape.ts) with each node's final x/y — a best-effort write (errors are swallowed) that persists layoutX/layoutY back onto the concepts table, so next visit starts from the same settled positions instead of re-scattering.",
+        "submitExplainBackAction saves the raw text, then analyzeAndRecord (lib/actions/explainBack.ts) calls the model, writes a conceptUnderstandings row, finds-or-creates each addressed concept (with its field), and records connectionsMade as 'explained' relations and relatedKnown as 'llm_inferred' ones, each tagged in explain_back_relations as new/strengthened. The session page then calls getReflection (lib/queries.ts) to get the before/after standing per concept and the relations this explain-back touched, and getMindscapeData() to load the whole knowledge state. Both are handed to the same <Mindscape> component, with highlightIds/focusIds set to the touched concepts' ids and reveal set — which makes buildMindscape() produce the full model as always (positions never depend on what's highlighted), but the client component's overlay canvas animates only those concepts' segments growing in, filtered by each segment's recorded growth order.",
     },
     modify: {
       prompt:
-        "Suppose you wanted 'prerequisite' edges (once they exist — see the Knowledge Model module's Modify prompt) to visually pull the prerequisite concept above the dependent one, rather than just being an undirected line. Describe what you'd change.",
+        "Suppose you wanted the Applied state (building something from a concept, mentioned as unbuilt in visual-grammar.md) to get its own mark on the land once it exists in the data model. Describe what you'd change.",
       groundTruth:
-        "You'd need a directional force, which plain forceLink doesn't provide (it treats links as undirected springs). The straightforward approach is adding a custom force function (d3-force supports arbitrary custom forces, not just the four built-in ones) that, for links where relationType === 'prerequisite', nudges the 'to' node's y velocity upward and the 'from' node's y velocity downward each tick — layered alongside the existing charge/link/center/collide forces in the .force(...) chain in Mindscape.tsx. You'd also want relationType threaded through from listMindscapeRelations() into the LinkDatum type, since it currently only carries fromConceptId/toConceptId/strength.",
+        "You'd add the signal to KnowledgeConcept in lib/knowledge.ts (e.g. an `applied: boolean` derived from a new table or field) and thread it into MapConcept in lib/mindscape/engine.ts. The grammar reserves 'a structure on the land' for exactly this case, so the natural implementation is a small deterministic mark drawn in the ground pass of buildMindscape — positioned at the concept's settled (x, y), seeded off the same per-concept rng so it's stable, drawn only when settle is at or near 1 (a structure needs ground to stand on). It should get its own field on PlacedConcept (e.g. `applied: boolean`) so draw.ts can render it as a distinct primitive rather than overloading an existing channel — the semantic-mapping doc's channel-budget table would need a new row, and the 'one channel per property' rule means nothing else may reuse that mark.",
     },
     design: {
       prompt:
-        "Propose one concrete improvement to Mindscape's visualization or performance, and justify the tradeoff.",
+        "Propose one concrete improvement to the Mindscape's visualization or performance, and justify the tradeoff.",
       groundTruth:
-        "Open-ended — evaluate for tradeoff-awareness. Reasonable directions: clustering/zooming for large graphs (the current WIDTH=800 fixed viewBox and O(n²) forceManyBody don't scale indefinitely), incremental re-layout that only re-settles newly added nodes instead of the whole graph on every visit, or exposing relation 'source' (llm_inferred vs manual) as a visual distinction.",
+        "Open-ended — evaluate for tradeoff-awareness against the grammar's own constraints (docs/mindscape/visual-grammar.md): the free-growth budget already scales down with concept count (the `budget` factor in buildMindscape) to keep large maps legible and fast, so a good answer engages with that rather than proposing an unrelated feature. Reasonable directions: semantic positioning from real embeddings instead of hash-based placement within a field (the doc flags this as unresolved), level-of-detail culling of fine branch segments when zoomed out rather than relying only on budget scaling, or a persisted 'reveal watermark' so a user who never opens a session's reflect view still eventually sees that growth on the main map without an explicit trigger.",
     },
   },
 };

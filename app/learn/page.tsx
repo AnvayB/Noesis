@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CaptureForm } from "@/components/CaptureForm";
 import { DeleteSessionButton } from "@/components/DeleteSessionButton";
+import { LearnNav } from "@/components/LearnNav";
 import { NavHeader } from "@/components/NavHeader";
 import { startFromQuestionAction } from "@/lib/actions/capture";
 import { resolveCuriosityItemAction } from "@/lib/actions/curiosity";
@@ -22,6 +23,15 @@ function formatDate(iso: string) {
   });
 }
 
+const KIND_WORD: Record<string, string> = {
+  youtube: "video",
+  article: "article",
+  paper: "paper",
+  podcast: "podcast",
+  doc: "documentation",
+  book: "book",
+};
+
 export default async function LearnPage() {
   const [inProgress, kept, questions, focus] = await Promise.all([
     listRecentSessions(20, { status: "started" }),
@@ -34,10 +44,21 @@ export default async function LearnPage() {
     <div className="flex flex-1 flex-col">
       <NavHeader active="Learn" />
 
-      <main className="page-enter mx-auto flex w-full max-w-3xl flex-1 flex-col gap-14 px-6 py-14 sm:px-10">
-        <section className="flex flex-col gap-6">
-          <h1 className="title text-[40px]">Learn</h1>
+      <main className="page-enter mx-auto flex w-full max-w-3xl flex-1 flex-col gap-14 px-6 py-12 sm:px-10 sm:py-14">
+        <section className="flex flex-col gap-8">
+          <div className="flex flex-col gap-5">
+            <h1 className="title text-[40px]">Learn</h1>
+            <LearnNav active="Start" />
+          </div>
           <CaptureForm returnTo="/learn" autoFocus />
+          <p className="meta -mt-4">
+            Or{" "}
+            <Link href="/sessions/new" className="link">
+              add with details
+            </Link>
+            : a title, a source, how you took it in, and notes, for logging a session you already did
+            or keeping one for later.
+          </p>
         </section>
 
         {inProgress.length > 0 && (
@@ -52,7 +73,7 @@ export default async function LearnPage() {
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="lamp-dot shrink-0" aria-hidden="true" />
                     <div className="flex min-w-0 flex-col">
-                      <Link href={`/sessions/${session.id}`} className="link truncate font-serif text-[19px]">
+                      <Link href={`/sessions/${session.id}#explain`} className="link truncate font-serif text-[19px]">
                         {session.title}
                       </Link>
                       <span className="meta">
@@ -62,7 +83,7 @@ export default async function LearnPage() {
                       </span>
                     </div>
                   </div>
-                  <Link href={`/sessions/${session.id}`} className="btn btn-line btn-sm shrink-0">
+                  <Link href={`/sessions/${session.id}#explain`} className="btn btn-ink btn-sm shrink-0">
                     Continue
                   </Link>
                 </li>
@@ -87,8 +108,13 @@ export default async function LearnPage() {
                       {session.title}
                     </Link>
                     <span className="meta">
-                      {session.conceptName ?? ""}
-                      {focus?.id === session.id ? (session.conceptName ? ". " : "") + "This week's thing." : ""}
+                      {[
+                        session.resourceType ? KIND_WORD[session.resourceType] ?? null : null,
+                        session.conceptName ?? null,
+                        focus?.id === session.id ? "This week's thing" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -144,32 +170,6 @@ export default async function LearnPage() {
               ))}
             </ul>
           )}
-        </section>
-
-        <section aria-label="Elsewhere" className="flex flex-col gap-3 border-t border-rule pt-8">
-          <p className="text-[15px]">
-            <Link href="/sessions" className="link">
-              Everything you have learned
-            </Link>
-            <span className="text-ink-soft">, kept, started, or explained.</span>
-          </p>
-          <p className="text-[15px]">
-            <Link href="/sessions/new" className="link">
-              Add something with details
-            </Link>
-            <span className="text-ink-soft">, when a link is not enough.</span>
-          </p>
-          <p className="text-[15px]">
-            <span className="text-ink-soft">Tracks: </span>
-            <Link href="/learn-noesis" className="link">
-              Learn Noesis
-            </Link>
-            <span className="text-ink-soft"> and </span>
-            <Link href="/arteris-101" className="link">
-              Arteris 101
-            </Link>
-            <span className="text-ink-soft">, graded self-study.</span>
-          </p>
         </section>
       </main>
     </div>

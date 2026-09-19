@@ -2,13 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NavHeader } from "@/components/NavHeader";
 import { updateSessionAction } from "@/lib/actions/sessions";
-import {
-  learningSessionStatusValues,
-  resourceTypeValues,
-  resourceTypeLabels,
-} from "@/lib/db/schema";
+import { resourceTypeValues, resourceTypeLabels } from "@/lib/db/schema";
 import { getSessionById } from "@/lib/queries";
-import { SESSION_STATUS_LABEL } from "@/lib/tagColors";
 
 export const dynamic = "force-dynamic";
 
@@ -48,34 +43,28 @@ export default async function EditSessionPage({
               />
             </label>
 
-            <label className="flex flex-col gap-1">
-              <span className="meta">Concept it belongs to</span>
-              <input
-                name="topic"
-                required
-                defaultValue={session.conceptName ?? ""}
-                className="field"
-              />
-              <span className="meta">Where this lands on your map.</span>
-            </label>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="meta">Concept it belongs to</span>
+                <input
+                  name="topic"
+                  required
+                  defaultValue={session.conceptName ?? ""}
+                  className="field"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="meta">Field</span>
+                <input
+                  name="field"
+                  defaultValue={session.conceptField ?? ""}
+                  placeholder="Machine learning, Baking…"
+                  className="field"
+                />
+              </label>
+            </div>
+            <p className="meta -mt-3">The concept is where this lands on your map; the field is the region it grows in.</p>
 
-            <fieldset className="flex flex-col gap-2">
-              <legend className="meta mb-2">State</legend>
-              <div className="flex flex-wrap gap-6 text-[15px]">
-                {learningSessionStatusValues.map((value) => (
-                  <label key={value} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="status"
-                      value={value}
-                      defaultChecked={session.status === value}
-                      className="radio"
-                    />
-                    {SESSION_STATUS_LABEL[value]}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
           </div>
 
           <div className="flex flex-col gap-6 border-t border-rule pt-8">

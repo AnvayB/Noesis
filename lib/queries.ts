@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { weekStartOf } from "@/lib/capture";
+import { deriveStanding, loadKnowledgeState, type KnowledgeState } from "@/lib/knowledge";
 import { getDb } from "./db";
 import {
   conceptRelations,
@@ -59,8 +60,11 @@ export async function listRecentSessions(limit = 5, filters: SessionFilters = {}
       conceptId: concepts.id,
       conceptName: concepts.name,
       conceptSlug: concepts.slug,
+      conceptField: concepts.field,
       resourceUrl: resources.url,
       resourceTitle: resources.title,
+      resourceType: resources.type,
+      notes: learningSessions.notes,
     })
     .from(learningSessions)
     .leftJoin(
@@ -108,10 +112,14 @@ export async function getSessionById(id: string) {
       conceptId: concepts.id,
       conceptName: concepts.name,
       conceptSlug: concepts.slug,
+      conceptField: concepts.field,
       resourceId: resources.id,
       resourceType: resources.type,
       resourceUrl: resources.url,
       resourceTitle: resources.title,
+      resourceByline: resources.byline,
+      resourceExcerpt: resources.excerpt,
+      resourceWordCount: resources.wordCount,
     })
     .from(learningSessions)
     .leftJoin(
@@ -177,28 +185,12 @@ export async function getExplainBackForSession(sessionId: string) {
   return { explainBack, analysis, conceptStatuses };
 }
 
-const STATUS_RANK: Record<ConceptAddressedStatus, number> = {
-  missing: 0,
-  partial: 1,
-  correct: 2,
-};
-
-/** Simple, transparent status derivation from explain-back + recall history
- * — no hidden scoring. "Applied" requires Project data (Architect For, not
- * built yet) so it's still unreachable in V1. */
+/** Transparent standing from explain-back + recall history. See lib/knowledge.ts. */
 export function deriveConceptStatusLabel(
-  statuses: ConceptAddressedStatus[],
-  recallOutcomes: RecallOutcome[] = [],
+  explanations: { at: string; status: ConceptAddressedStatus }[],
+  recalls: { at: string; outcome: RecallOutcome }[] = [],
 ) {
-  if (recallOutcomes.includes("remembered")) return "Retained";
-  if (statuses.length === 0) return "Encountered";
-  const best = statuses.reduce(
-    (max, s) => (STATUS_RANK[s] > STATUS_RANK[max] ? s : max),
-    statuses[0],
-  );
-  if (best === "correct") return "Can Explain";
-  if (best === "partial") return "Familiar";
-  return "Encountered";
+  return deriveStanding(explanations, recalls).standing;
 }
 
 export async function getConceptBySlug(slug: string) {
@@ -216,6 +208,8 @@ export async function getConceptUnderstandingHistory(conceptId: string) {
       omissions: conceptUnderstandings.omissions,
       misconceptions: conceptUnderstandings.misconceptions,
       followUpQuestion: conceptUnderstandings.followUpQuestion,
+      gist: conceptUnderstandings.gist,
+      level: conceptUnderstandings.level,
       createdAt: explainBacks.createdAt,
       sessionId: explainBacks.sessionId,
       sessionTitle: learningSessions.title,
@@ -271,75 +265,9 @@ export async function getRelatedConcepts(conceptId: string) {
   );
 }
 
-export interface MindscapeConcept {
-  id: string;
-  name: string;
-  slug: string;
-  statusLabel: string;
-  lastEncounteredAt: string;
-  lastReviewedAt: string | null;
-  layoutX: number | null;
-  layoutY: number | null;
-}
-
-export async function listMindscapeConcepts(): Promise<MindscapeConcept[]> {
-  const db = await getDb();
-  const allConcepts = await db.select().from(concepts).all();
-  const statusRows = await db
-    .select({
-      conceptId: explainBackConcepts.conceptId,
-      status: explainBackConcepts.status,
-    })
-    .from(explainBackConcepts)
-    .all();
-
-  const statusesByConcept = new Map<string, ConceptAddressedStatus[]>();
-  for (const row of statusRows) {
-    const list = statusesByConcept.get(row.conceptId) ?? [];
-    list.push(row.status);
-    statusesByConcept.set(row.conceptId, list);
-  }
-
-  const outcomeRows = await db
-    .select({
-      conceptId: recallAttempts.conceptId,
-      outcome: recallAttempts.outcome,
-    })
-    .from(recallAttempts)
-    .all();
-  const outcomesByConcept = new Map<string, RecallOutcome[]>();
-  for (const row of outcomeRows) {
-    if (!row.outcome) continue;
-    const list = outcomesByConcept.get(row.conceptId) ?? [];
-    list.push(row.outcome);
-    outcomesByConcept.set(row.conceptId, list);
-  }
-
-  return allConcepts.map((c) => ({
-    id: c.id,
-    name: c.name,
-    slug: c.slug,
-    statusLabel: deriveConceptStatusLabel(
-      statusesByConcept.get(c.id) ?? [],
-      outcomesByConcept.get(c.id) ?? [],
-    ),
-    lastEncounteredAt: c.lastEncounteredAt,
-    lastReviewedAt: c.lastReviewedAt,
-    layoutX: c.layoutX,
-    layoutY: c.layoutY,
-  }));
-}
-
-export async function listMindscapeRelations() {
-  const db = await getDb();
-  return db
-    .select({
-      fromConceptId: conceptRelations.fromConceptId,
-      toConceptId: conceptRelations.toConceptId,
-      strength: conceptRelations.strength,
-    })
-    .from(conceptRelations)
-    .all();
+/** Everything the map needs, in one call. */
+export async function getMindscapeData(): Promise<KnowledgeState> {
+  return loadKnowledgeState();
 }
 
 export async function getRecallHistoryForConcept(conceptId: string) {
@@ -416,6 +344,7 @@ export interface ReflectionConcept {
   conceptId: string;
   conceptName: string;
   conceptSlug: string;
+  conceptField: string | null;
   status: ConceptAddressedStatus;
   before: string;
   after: string;
@@ -426,8 +355,10 @@ export interface ReflectionRelation {
   kind: "new" | "strengthened";
   fromName: string;
   fromSlug: string;
+  fromField: string | null;
   toName: string;
   toSlug: string;
+  toField: string | null;
   description: string | null;
 }
 
@@ -451,6 +382,7 @@ export async function getReflection(sessionId: string) {
       conceptId: concepts.id,
       conceptName: concepts.name,
       conceptSlug: concepts.slug,
+      conceptField: concepts.field,
       firstEncounteredAt: concepts.firstEncounteredAt,
       status: explainBackConcepts.status,
     })
@@ -473,21 +405,21 @@ export async function getReflection(sessionId: string) {
       .orderBy(explainBacks.createdAt)
       .all();
     const recalls = await db
-      .select({ outcome: recallAttempts.outcome })
+      .select({ outcome: recallAttempts.outcome, at: recallAttempts.answeredAt })
       .from(recallAttempts)
       .where(eq(recallAttempts.conceptId, c.conceptId))
       .all();
     const outcomes = recalls
-      .map((r) => r.outcome)
-      .filter((o): o is RecallOutcome => o !== null);
+      .filter((r): r is { outcome: RecallOutcome; at: string } => r.outcome !== null && r.at !== null);
     const earlier = history.filter((h) => h.explainBackId !== back.id && h.createdAt < back.createdAt);
     reflectionConcepts.push({
       conceptId: c.conceptId,
       conceptName: c.conceptName,
       conceptSlug: c.conceptSlug,
+      conceptField: c.conceptField,
       status: c.status,
-      before: deriveConceptStatusLabel(earlier.map((h) => h.status), outcomes),
-      after: deriveConceptStatusLabel(history.map((h) => h.status), outcomes),
+      before: deriveConceptStatusLabel(earlier.map((h) => ({ at: h.createdAt, status: h.status })), outcomes),
+      after: deriveConceptStatusLabel(history.map((h) => ({ at: h.createdAt, status: h.status })), outcomes),
       // Created by this explanation, not merely captured earlier as a spore.
       isNew: c.firstEncounteredAt >= back.createdAt,
     });
@@ -500,8 +432,10 @@ export async function getReflection(sessionId: string) {
       kind: explainBackRelations.kind,
       fromName: fromConcepts.name,
       fromSlug: fromConcepts.slug,
+      fromField: fromConcepts.field,
       toName: toConcepts.name,
       toSlug: toConcepts.slug,
+      toField: toConcepts.field,
       description: conceptRelations.description,
     })
     .from(explainBackRelations)
@@ -532,4 +466,31 @@ export async function countInbox() {
     .where(isNull(curiosityItems.resolvedAt))
     .get();
   return { kept: Number(kept?.n ?? 0), questions: Number(questions?.n ?? 0) };
+}
+
+/** What was explained lately, as the learner's own gists, newest first. */
+export async function listRecentGists(limit = 5) {
+  const db = await getDb();
+  return db
+    .select({
+      sessionId: learningSessions.id,
+      sessionTitle: learningSessions.title,
+      gist: conceptUnderstandings.gist,
+      level: conceptUnderstandings.level,
+      followUpQuestion: conceptUnderstandings.followUpQuestion,
+      at: explainBacks.createdAt,
+      conceptName: concepts.name,
+      conceptSlug: concepts.slug,
+    })
+    .from(conceptUnderstandings)
+    .innerJoin(explainBacks, eq(explainBacks.id, conceptUnderstandings.explainBackId))
+    .innerJoin(learningSessions, eq(learningSessions.id, explainBacks.sessionId))
+    .leftJoin(
+      sessionConcepts,
+      and(eq(sessionConcepts.sessionId, learningSessions.id), eq(sessionConcepts.role, "primary")),
+    )
+    .leftJoin(concepts, eq(concepts.id, sessionConcepts.conceptId))
+    .orderBy(desc(explainBacks.createdAt))
+    .limit(limit)
+    .all();
 }

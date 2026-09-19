@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LearnNav } from "@/components/LearnNav";
 import { NavHeader } from "@/components/NavHeader";
 import { CURRICULUM_TRACKS, listCurriculumPhases, type CurriculumTrack } from "@/lib/curriculum";
 import { listModuleProgressSummaries } from "@/lib/curriculum/queries";
@@ -35,8 +36,9 @@ export async function CurriculumTrackIndex({
       <NavHeader active="Learn" />
 
       <main className="page-enter mx-auto flex w-full max-w-3xl flex-1 flex-col gap-14 px-6 py-14 sm:px-10">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           <h1 className="title text-[40px]">{label}</h1>
+          <LearnNav active="Tracks" />
           <p className="reading text-[17px] text-ink-soft">{description}</p>
         </div>
 
