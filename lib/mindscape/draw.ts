@@ -417,7 +417,19 @@ export function drawGrove(
 // ─── Sky ────────────────────────────────────────────────────────────────
 
 const WARM_DWARF: RGB = [176, 96, 70];
-const MIDNIGHT: RGB = [10, 14, 26];
+const MIDNIGHT: RGB = [7, 9, 18];
+
+// Sky is a night, not paper — its stars need real saturation and glow, not
+// the muted survey palette the other two climates sit on. Same six fields,
+// their vivid counterparts: gold, cyan, magenta, blue, green, orange.
+const SKY_HUES: RGB[] = [
+  [247, 200, 96],
+  [86, 224, 232],
+  [244, 128, 176],
+  [122, 176, 250],
+  [130, 226, 142],
+  [248, 148, 84],
+];
 
 export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w: number, h: number, skip: Set<string>) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -426,7 +438,8 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
   // before the bottom edge — never an abrupt cut.
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, rgba(MIDNIGHT, 1));
-  grad.addColorStop(0.62, rgba(mix(MIDNIGHT, pal.paper, 0.35), 1));
+  grad.addColorStop(0.45, rgba(mix(MIDNIGHT, [24, 24, 46], 0.7), 1));
+  grad.addColorStop(0.68, rgba(mix(MIDNIGHT, pal.paper, 0.4), 1));
   grad.addColorStop(1, rgba(pal.paper, 1));
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
@@ -459,17 +472,18 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
     ctx.restore();
   }
 
-  // Haze: soft colored washes behind the real stars.
+  // Haze: rich colored nebula washes behind the real stars.
   for (const hz of model.haze) {
     const grad2 = ctx.createRadialGradient(hz.x, hz.y, 0, hz.x, hz.y, hz.r);
-    grad2.addColorStop(0, rgba(pal.hues[hz.hue], hz.a));
-    grad2.addColorStop(1, rgba(pal.hues[hz.hue], 0));
+    grad2.addColorStop(0, rgba(SKY_HUES[hz.hue], hz.a));
+    grad2.addColorStop(0.5, rgba(SKY_HUES[hz.hue], hz.a * 0.4));
+    grad2.addColorStop(1, rgba(SKY_HUES[hz.hue], 0));
     ctx.fillStyle = grad2;
     ctx.beginPath(); ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2); ctx.fill();
   }
 
   for (const d of model.dust) {
-    ctx.fillStyle = rgba([210, 214, 224], d.a);
+    ctx.fillStyle = rgba([236, 238, 246], d.a);
     ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
   }
 
@@ -488,60 +502,64 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
 
   // Earned constellation lines.
   for (const l of model.lines) {
-    ctx.strokeStyle = rgba(pal.hues[l.hue], l.strong ? 0.5 : 0.3);
-    ctx.lineWidth = (l.strong ? 1 : 0.6) / view.scale;
+    ctx.strokeStyle = rgba(SKY_HUES[l.hue], l.strong ? 0.75 : 0.5);
+    ctx.lineWidth = (l.strong ? 1.3 : 0.9) / view.scale;
     ctx.beginPath(); ctx.moveTo(l.ax, l.ay); ctx.lineTo(l.bx, l.by); ctx.stroke();
   }
   // Bridges: a light filament with a ring at each end.
   for (const br of model.bridges) {
     const grad2 = ctx.createLinearGradient(br.ax, br.ay, br.bx, br.by);
-    grad2.addColorStop(0, rgba(pal.hues[br.hueA], 0.75));
-    grad2.addColorStop(1, rgba(pal.hues[br.hueB], 0.75));
+    grad2.addColorStop(0, rgba(SKY_HUES[br.hueA], 0.9));
+    grad2.addColorStop(1, rgba(SKY_HUES[br.hueB], 0.9));
     ctx.strokeStyle = grad2;
-    ctx.lineWidth = 1.3 / view.scale;
+    ctx.lineWidth = 1.8 / view.scale;
     ctx.beginPath(); ctx.moveTo(br.ax, br.ay); ctx.lineTo(br.bx, br.by); ctx.stroke();
     for (const [x, y, hue] of [[br.ax, br.ay, br.hueA], [br.bx, br.by, br.hueB]] as const) {
-      ctx.strokeStyle = rgba(pal.hues[hue], 0.6);
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = rgba(SKY_HUES[hue], 0.8);
+      ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
     }
   }
 
   for (const s of model.stars) {
     if (skip.has(s.id)) continue;
-    const hue = s.weak ? WARM_DWARF : pal.hues[s.hue];
-    const r = s.weak ? 1.4 : Math.max(1, s.magnitude * 0.42);
-    if (s.halo > 0 && !s.weak) {
-      const hr = r + 3 + s.halo * 6;
+    const hue = s.weak ? WARM_DWARF : SKY_HUES[s.hue];
+    const r = s.weak ? 1.6 : Math.max(1.8, s.magnitude * 0.62);
+    if (!s.weak) {
+      // Every real star gets a glow, not just the halo-earning ones —
+      // this is a night sky, not a scatter of dots.
+      const hr = r + 5 + s.halo * 9;
       const grad2 = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, hr);
-      grad2.addColorStop(0, rgba(hue, 0.3));
+      grad2.addColorStop(0, rgba(hue, 0.55));
+      grad2.addColorStop(0.35, rgba(hue, 0.22));
       grad2.addColorStop(1, rgba(hue, 0));
       ctx.fillStyle = grad2;
       ctx.beginPath(); ctx.arc(s.x, s.y, hr, 0, Math.PI * 2); ctx.fill();
     }
     // Exceptional: rare, so it stays meaningful. A wide radiant bloom.
     if (s.exceptional) {
-      const br = r * 6;
+      const br = r * 7;
       const bloom = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, br);
-      bloom.addColorStop(0, rgba(hue, 0.35));
-      bloom.addColorStop(0.4, rgba(hue, 0.12));
+      bloom.addColorStop(0, rgba(hue, 0.5));
+      bloom.addColorStop(0.4, rgba(hue, 0.18));
       bloom.addColorStop(1, rgba(hue, 0));
       ctx.fillStyle = bloom;
       ctx.beginPath(); ctx.arc(s.x, s.y, br, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = rgba(hue, 0.35);
-      ctx.lineWidth = 0.6 / view.scale;
+      ctx.strokeStyle = rgba(hue, 0.45);
+      ctx.lineWidth = 0.7 / view.scale;
       ctx.beginPath(); ctx.arc(s.x, s.y, br * 0.65, 0, Math.PI * 2); ctx.stroke();
     }
-    if (s.spikes) {
-      ctx.strokeStyle = rgba(hue, 0.55);
-      ctx.lineWidth = 0.7 / view.scale;
-      const sp = r + 5;
+    if (s.spikes || s.exceptional) {
+      ctx.strokeStyle = rgba(mix(hue, [255, 255, 255], 0.4), 0.85);
+      ctx.lineWidth = 0.9 / view.scale;
+      const sp = r + 7;
       ctx.beginPath();
       ctx.moveTo(s.x - sp, s.y); ctx.lineTo(s.x + sp, s.y);
       ctx.moveTo(s.x, s.y - sp); ctx.lineTo(s.x, s.y + sp);
       ctx.stroke();
     }
-    ctx.fillStyle = rgba(hue, s.explained ? 0.95 : 0.6);
-    ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(r, 0.9), 0, Math.PI * 2); ctx.fill();
+    // A bright white-hot core makes even a small star read as light, not paint.
+    ctx.fillStyle = rgba(mix(hue, [255, 255, 255], s.weak ? 0 : 0.55), s.explained ? 1 : 0.7);
+    ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(r, 1.1), 0, Math.PI * 2); ctx.fill();
   }
 }
