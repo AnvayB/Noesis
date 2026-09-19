@@ -38,6 +38,8 @@ export interface SkyStar {
   live: boolean;
   standing: Standing;
   explained: boolean;
+  /** Rare: deep, retained, revisited more than most. A bloom worth noticing. */
+  exceptional: boolean;
 }
 
 export interface SkyLine {
@@ -66,6 +68,24 @@ export interface SkyDust {
   a: number;
 }
 
+/** A distant spiral, pure atmosphere — never a concept, never labeled. */
+export interface SkyGalaxy {
+  x: number;
+  y: number;
+  r: number;
+  rotation: number;
+  a: number;
+}
+
+/** A soft colored haze behind the real stars, atmosphere only. */
+export interface SkyHaze {
+  x: number;
+  y: number;
+  r: number;
+  hue: number;
+  a: number;
+}
+
 export interface SkyModel {
   width: number;
   height: number;
@@ -74,6 +94,8 @@ export interface SkyModel {
   lines: SkyLine[];
   bridges: SkyBridge[];
   dust: SkyDust[];
+  galaxies: SkyGalaxy[];
+  haze: SkyHaze[];
   points: MapPoint[];
   bounds: { x0: number; y0: number; x1: number; y1: number };
 }
@@ -98,12 +120,14 @@ export function buildSky(input: MapInput): SkyModel {
       nebula: w.input.standing === "Retained" ? Math.min(1, (now - parseWhen(w.input.retainedAt ?? w.input.firstEncounteredAt)) / (60 * DAY)) : 0,
       weak, live: now - parseWhen(w.input.lastTouchedAt) <= 14 * DAY,
       standing: w.input.standing, explained,
+      exceptional: w.input.standing === "Retained" && w.input.explanations.length >= 3 && extent > 0.85,
     };
   });
   const byId = new Map(stars.map((s) => [s.id, s]));
 
   const lines: SkyLine[] = [];
   const bridges: SkyBridge[] = [];
+  
   const seenPair = new Set<string>();
   for (const r of input.relations) {
     const a = byId.get(r.fromId), b = byId.get(r.toId);
@@ -138,8 +162,26 @@ export function buildSky(input: MapInput): SkyModel {
     dust.push({ x: rng() * W, y: rng() * H, r: 0.4 + rng() * 0.9, a: 0.12 + rng() * 0.28 });
   }
 
+  // Two distant galaxies, pure atmosphere, placed away from the content so
+  // they never compete with it.
+  const grng = mulberry32(hash32("galaxy:" + input.seed));
+  const galaxies: SkyGalaxy[] = [
+    { x: W * 0.08 + grng() * W * 0.06, y: H * 0.22 + grng() * H * 0.15, r: 70 + grng() * 30, rotation: grng() * Math.PI, a: 0.5 },
+    { x: W * 0.9 - grng() * W * 0.06, y: H * 0.3 + grng() * H * 0.2, r: 60 + grng() * 25, rotation: grng() * Math.PI, a: 0.42 },
+  ];
+
+  // Soft haze behind the fields with real content, and a couple of loose
+  // ones elsewhere for atmosphere.
+  const hrng = mulberry32(hash32("haze:" + input.seed));
+  const haze: SkyHaze[] = fields
+    .filter((f) => f.count > 0)
+    .map((f) => ({ x: f.x, y: f.y, r: f.reach * 2.2, hue: f.hue, a: 0.05 + hrng() * 0.04 }));
+  for (let i = 0; i < 2; i++) {
+    haze.push({ x: hrng() * W, y: hrng() * H * 0.7, r: 90 + hrng() * 60, hue: Math.floor(hrng() * 6), a: 0.03 + hrng() * 0.03 });
+  }
+
   return {
-    width: W, height: H, fields, stars, lines, bridges, dust,
+    width: W, height: H, fields, stars, lines, bridges, dust, galaxies, haze,
     points: stars.map((s) => ({ id: s.id, name: s.name, slug: s.slug, x: s.x, y: s.y })),
     bounds: { x0, y0, x1, y1 },
   };

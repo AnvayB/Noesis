@@ -2,21 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildMindscape, type MapConcept, type MapPoint, type MapRelation } from "@/lib/mindscape/engine";
+import type { MapConcept, MapPoint, MapRelation } from "@/lib/mindscape/engine";
+import { buildGroundEcosystem } from "@/lib/mindscape/ground";
 import { buildGrove } from "@/lib/mindscape/grove";
 import { buildSky } from "@/lib/mindscape/sky";
 import {
   DEFAULT_PALETTE,
   clampView,
-  drawBase,
   drawGenericGlow,
+  drawGround,
   drawGrove,
-  drawLive,
-  drawMarks,
   drawSky,
-  drawThreads,
   fitView,
-  groundPixels,
   groveWashPixels,
   hexToRgb,
   type Palette,
@@ -26,7 +23,7 @@ import {
 export type Climate = "ground" | "grove" | "sky";
 
 export const CLIMATES: { id: Climate; label: string; blurb: string }[] = [
-  { id: "ground", label: "Ground", blurb: "Threads that settle into contoured land." },
+  { id: "ground", label: "Microcosm", blurb: "Domains as colonies, concepts as cells." },
   { id: "grove", label: "Grove", blurb: "Each field a tree; retention is foliage." },
   { id: "sky", label: "Sky", blurb: "Concepts as stars; bridges as light." },
 ];
@@ -36,10 +33,10 @@ export interface MindscapeProps {
   relations: MapRelation[];
   seed: string;
   climate?: Climate;
-  /** Concepts this view is about: named, ringed in lamp, and, on Ground
-   * when `reveal` is set, grown in front of you. */
+  /** Concepts this view is about: named, ringed in lamp, and, when `reveal`
+   * is set, faded in over the sitter's shoulder. */
   highlightIds?: string[];
-  /** Animate the highlighted concepts' growth on mount. Ground only. */
+  /** Fade the highlighted concepts in on mount. */
   reveal?: boolean;
   /** Pan and zoom with the pointer. On by default on the full page. */
   interactive?: boolean;
@@ -64,19 +61,8 @@ function readPalette(el: HTMLElement): Palette {
   };
 }
 
-// Ground's heightfield, and Grove's meadow wash, are painted as small G×G
-// images and scaled up with smoothing — the same pattern for both.
-function paintGround(model: { grid: number; ground: Float32Array; tint: Float32Array; tintW: Float32Array; relief: Float32Array }, pal: Palette): HTMLCanvasElement {
-  const G = model.grid;
-  const off = document.createElement("canvas");
-  off.width = G; off.height = G;
-  const ctx = off.getContext("2d")!;
-  const img = ctx.createImageData(G, G);
-  img.data.set(groundPixels(model as Parameters<typeof groundPixels>[0], pal));
-  ctx.putImageData(img, 0, 0);
-  return off;
-}
-function paintGroveWash(model: { grid: number; relief: Float32Array }, pal: Palette): HTMLCanvasElement {
+// Grove's meadow wash is painted as a small G×G image and scaled up with smoothing.
+function paintGroveWash(model: { grid: number; relief: Float32Array; groundY: number; height: number }, pal: Palette): HTMLCanvasElement {
   const G = model.grid;
   const off = document.createElement("canvas");
   off.width = G; off.height = G;
@@ -117,18 +103,11 @@ export function Mindscape({
   const focusSet = useMemo(() => new Set(focusKey ? focusKey.split("|") : []), [focusKey]);
 
   const input = useMemo(() => ({ concepts, relations, seed }), [concepts, relations, seed]);
-  const groundModel = useMemo(() => (climate === "ground" ? buildMindscape(input) : null), [climate, input]);
+  const groundModel = useMemo(() => (climate === "ground" ? buildGroundEcosystem(input) : null), [climate, input]);
   const groveModel = useMemo(() => (climate === "grove" ? buildGrove(input) : null), [climate, input]);
   const skyModel = useMemo(() => (climate === "sky" ? buildSky(input) : null), [climate, input]);
   const model = groundModel ?? groveModel ?? skyModel!;
   const points: MapPoint[] = model.points;
-
-  const highlightIdx = useMemo(() => {
-    if (!groundModel) return new Set<number>();
-    const s = new Set<number>();
-    groundModel.concepts.forEach((c, i) => { if (highlightSet.has(c.id)) s.add(i); });
-    return s;
-  }, [groundModel, highlightSet]);
 
   // Size to the container; redraw on resize.
   useEffect(() => {
@@ -168,7 +147,6 @@ export function Mindscape({
   }, [view]);
 
   // Base layer: everything still.
-  const groundRef = useRef<{ key: string; img: HTMLCanvasElement } | null>(null);
   const groveWashRef = useRef<{ key: string; img: HTMLCanvasElement } | null>(null);
   useEffect(() => {
     const canvas = baseRef.current, wrap = wrapRef.current;
@@ -179,25 +157,22 @@ export function Mindscape({
     ctx.scale(dpr, dpr);
     const pal = readPalette(wrap);
     const scaled = { scale: view.scale, tx: view.tx, ty: view.ty };
+    const skipSet = reveal ? highlightSet : new Set<string>();
 
     if (groundModel) {
-      const key = `${pal.night}|${groundModel.maxHeight}|${groundModel.concepts.length}|${seed}`;
-      if (!groundRef.current || groundRef.current.key !== key) {
-        groundRef.current = { key, img: paintGround(groundModel, pal) };
-      }
-      drawBase(ctx, groundModel, pal, scaled, size.w, size.h, reveal ? highlightIdx : new Set(), labels, groundRef.current.img);
+      drawGround(ctx, groundModel, pal, scaled, size.w, size.h, skipSet);
     } else if (groveModel) {
       const key = `${pal.night}|${groveModel.branches.length}|${seed}`;
       if (!groveWashRef.current || groveWashRef.current.key !== key) {
         groveWashRef.current = { key, img: paintGroveWash(groveModel, pal) };
       }
-      drawGrove(ctx, groveModel, pal, scaled, size.w, size.h, new Set(), groveWashRef.current.img);
+      drawGrove(ctx, groveModel, pal, scaled, size.w, size.h, skipSet, groveWashRef.current.img);
     } else if (skyModel) {
-      drawSky(ctx, skyModel, pal, scaled, size.w, size.h, new Set());
+      drawSky(ctx, skyModel, pal, scaled, size.w, size.h, skipSet);
     }
-  }, [groundModel, groveModel, skyModel, size, view, themeTick, reveal, highlightIdx, labels, seed]);
+  }, [groundModel, groveModel, skyModel, size, view, themeTick, reveal, highlightSet, labels, seed]);
 
-  // Overlay: what is happening now. Live tips breathe; the reveal grows (Ground only).
+  // Overlay: what is happening now, and a fade-in for what a reveal is about.
   useEffect(() => {
     const canvas = overRef.current, wrap = wrapRef.current;
     if (!canvas || !wrap || !size.w || !view) return;
@@ -206,18 +181,17 @@ export function Mindscape({
     const ctx = canvas.getContext("2d")!;
     const pal = readPalette(wrap);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reveal && groundModel && revealStart.current === null) revealStart.current = performance.now() + 350;
+    if (reveal && revealStart.current === null) revealStart.current = performance.now() + 250;
     let raf = 0;
-    const REVEAL_MS = 1900;
+    const REVEAL_MS = 1100;
 
     const liveIds = new Set(
       groundModel
-        ? groundModel.concepts.filter((c) => c.live).map((c) => c.id)
+        ? groundModel.cells.filter((c) => c.live).map((c) => c.id)
         : groveModel
           ? groveModel.branches.filter((b) => b.live).map((b) => b.id)
           : skyModel!.stars.filter((s) => s.live).map((s) => s.id),
     );
-    const liveIdx = groundModel ? groundModel.concepts.map((c, i) => (c.live ? i : -1)).filter((i) => i >= 0) : [];
 
     const frame = (t: number) => {
       const view = viewRef.current;
@@ -227,26 +201,24 @@ export function Mindscape({
       ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.tx * dpr, view.ty * dpr);
 
       let revealDone = true;
-      if (groundModel) {
-        if (reveal && highlightIdx.size > 0) {
-          const f = reduced ? 1 : Math.min(1, Math.max(0, (t - (revealStart.current ?? t)) / REVEAL_MS));
-          revealDone = f >= 1;
-          const eased = 1 - Math.pow(1 - f, 3);
-          drawThreads(ctx, groundModel, pal, view, (s) => highlightIdx.has(s.c), () => eased);
-          if (f > 0.75) drawMarks(ctx, groundModel, pal, (c) => highlightIdx.has(c), Math.min(1, (f - 0.75) / 0.25));
-        }
-        const breathe = reduced ? 0.8 : 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t / 640));
-        drawLive(ctx, groundModel, pal, view, liveIdx, highlightIdx, breathe);
-        if (!reduced && (liveIdx.length > 0 || highlightIdx.size > 0 || !revealDone)) raf = requestAnimationFrame(frame);
-      } else {
-        const breathe = reduced ? 0.8 : 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t / 640));
-        drawGenericGlow(ctx, points, liveIds, highlightSet, pal, view, breathe);
-        if (!reduced && (liveIds.size > 0 || highlightSet.size > 0)) raf = requestAnimationFrame(frame);
+      if (reveal && highlightSet.size > 0) {
+        const f = reduced ? 1 : Math.min(1, Math.max(0, (t - (revealStart.current ?? t)) / REVEAL_MS));
+        revealDone = f >= 1;
+        ctx.save();
+        ctx.globalAlpha = 1 - Math.pow(1 - f, 3);
+        if (groundModel) drawGround(ctx, groundModel, pal, view, size.w, size.h, new Set());
+        else if (groveModel) drawGrove(ctx, groveModel, pal, view, size.w, size.h, new Set());
+        else if (skyModel) drawSky(ctx, skyModel, pal, view, size.w, size.h, new Set());
+        ctx.restore();
       }
+
+      const breathe = reduced ? 0.8 : 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t / 640));
+      drawGenericGlow(ctx, points, liveIds, highlightSet, pal, view, breathe);
+      if (!reduced && (liveIds.size > 0 || highlightSet.size > 0 || !revealDone)) raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [groundModel, groveModel, skyModel, points, size, view, themeTick, reveal, highlightIdx, highlightSet]);
+  }, [groundModel, groveModel, skyModel, points, size, view, themeTick, reveal, highlightSet]);
 
   // Pointer: hover names a point; click opens it; drag pans; wheel zooms.
   function toWorld(e: { clientX: number; clientY: number }) {
@@ -311,7 +283,7 @@ export function Mindscape({
   }, [interactive, model, size]);
 
   const empty = concepts.length === 0;
-  const emptyWord = climate === "grove" ? "No trees yet." : climate === "sky" ? "An empty sky, so far." : "Fog, so far.";
+  const emptyWord = climate === "grove" ? "No trees yet." : climate === "sky" ? "An empty sky, so far." : "Nothing growing yet.";
 
   return (
     <div
@@ -328,7 +300,7 @@ export function Mindscape({
       <canvas ref={overRef} className="absolute inset-0 h-full w-full" style={{ width: size.w, height: size.h }} />
       {hover && !highlightSet.has(hover.id) && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap font-serif text-[14px] italic text-ink"
+          className={`pointer-events-none absolute -translate-x-1/2 whitespace-nowrap font-serif text-[14px] italic ${climate === "sky" ? "text-[#e5e3ee]" : "text-ink"}`}
           style={{ left: hover.x, top: hover.y + 14 }}
         >
           {hover.name}
@@ -336,7 +308,7 @@ export function Mindscape({
       )}
       {empty && (
         <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-10">
-          <p className="question max-w-md text-center text-ink-soft">
+          <p className={`question max-w-md text-center ${climate === "sky" ? "text-[#b7b6c4]" : "text-ink-soft"}`}>
             {emptyWord} Explain something you have learned and the first marks appear here.
           </p>
         </div>

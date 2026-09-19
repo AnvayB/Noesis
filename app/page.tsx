@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CaptureForm } from "@/components/CaptureForm";
-import { Mindscape } from "@/components/Mindscape";
+import { MindscapeExplorer } from "@/components/MindscapeExplorer";
 import { NavHeader } from "@/components/NavHeader";
 import { clearWeeklyFocusAction } from "@/lib/actions/focus";
 import { submitRecallAnswerAction } from "@/lib/actions/recall";
@@ -22,14 +22,6 @@ function formatDate(iso: string) {
   return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
     month: "long",
     day: "numeric",
-    timeZone: "America/Los_Angeles",
-  });
-}
-
-function monthOf(iso: string) {
-  return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric",
     timeZone: "America/Los_Angeles",
   });
 }
@@ -67,9 +59,6 @@ export default async function NowPage() {
 
   const growth = recentGrowth(state, 14);
   const fields = [...new Set(state.concepts.map((c) => c.field).filter((f): f is string => !!f))];
-  const firstEver = state.concepts
-    .map((c) => c.firstEncounteredAt)
-    .sort()[0];
   const continueList = [
     ...(focus && focus.status === "started" ? [{ ...focus, isFocus: true, conceptField: null as string | null }] : []),
     ...inProgress.filter((s) => s.id !== focus?.id).map((s) => ({ ...s, isFocus: false })),
@@ -82,27 +71,16 @@ export default async function NowPage() {
       <NavHeader active="Now" />
 
       <main className="page-enter flex flex-1 flex-col">
-        {/* The map is the top of the page, not a widget on it. */}
+        {/* The map is the page's hero, not a widget floating on it. */}
         <section aria-label="Mindscape" className="relative w-full">
-          <div className="map-fade h-[52vh] min-h-[360px] max-h-[640px] w-full">
-            <Mindscape
-              concepts={state.concepts}
-              relations={state.relations}
-              seed={getMindscapeSeed()}
-              highlightIds={highlight.slice(0, 8)}
-              labels
-            />
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto flex w-full max-w-6xl items-end justify-between px-6 sm:px-10">
-            <p className="meta">
-              {empty
-                ? "Your map. Nothing on it yet."
-                : `Your map, since ${monthOf(firstEver)}${fields.length ? `: ${fields.slice(0, 5).join(", ")}${fields.length > 5 ? ", and more" : ""}` : ""}.`}
-            </p>
-            <Link href="/mindscape" className="link link-soft pointer-events-auto text-sm">
-              Open the map
-            </Link>
-          </div>
+          <MindscapeExplorer
+            concepts={state.concepts}
+            relations={state.relations}
+            seed={getMindscapeSeed()}
+            fields={fields}
+            highlightIds={highlight.slice(0, 8)}
+            heightClassName="h-[70vh] min-h-[480px] max-h-[820px]"
+          />
         </section>
 
         <div className="mx-auto grid w-full max-w-6xl gap-14 px-6 pb-20 pt-10 sm:px-10 lg:grid-cols-[minmax(0,1fr)_24rem] lg:gap-20">
