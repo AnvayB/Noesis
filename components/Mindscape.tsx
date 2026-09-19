@@ -25,7 +25,7 @@ export type Climate = "ground" | "grove" | "sky";
 export const CLIMATES: { id: Climate; label: string; blurb: string }[] = [
   { id: "ground", label: "Microcosm", blurb: "Domains as colonies, concepts as cells." },
   { id: "grove", label: "Grove", blurb: "Each field a tree; retention is foliage." },
-  { id: "sky", label: "Sky", blurb: "Concepts as stars; bridges as light." },
+  { id: "sky", label: "Nebula", blurb: "Concepts as stars; bridges as light." },
 ];
 
 export interface MindscapeProps {
