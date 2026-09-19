@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import type { MapConcept, MapPoint, MapRelation } from "@/lib/mindscape/engine";
 import { buildGroundEcosystem } from "@/lib/mindscape/ground";
 import { buildGrove } from "@/lib/mindscape/grove";
@@ -27,6 +28,16 @@ export const CLIMATES: { id: Climate; label: string; blurb: string }[] = [
   { id: "grove", label: "Grove", blurb: "Each field a tree; retention is foliage." },
   { id: "sky", label: "Nebula", blurb: "Concepts as stars; bridges as light." },
 ];
+
+// Ground -> Grove -> Sky is "outward and upward": the cellular scale gives
+// way to the botanical, which gives way to the celestial. Moving forward
+// through this order is a zoom out; moving backward is a descent back in.
+// The transition below reads its direction from this list, not a hardcoded
+// pair, so a fourth climate added at either end stays correct for free.
+const CLIMATE_ORDER: Climate[] = ["ground", "grove", "sky"];
+function directionBetween(from: Climate, to: Climate): 1 | -1 {
+  return CLIMATE_ORDER.indexOf(to) > CLIMATE_ORDER.indexOf(from) ? 1 : -1;
+}
 
 export interface MindscapeProps {
   concepts: MapConcept[];
@@ -73,18 +84,24 @@ function paintGroveWash(model: { grid: number; relief: Float32Array; groundY: nu
   return off;
 }
 
-export function Mindscape({
+/**
+ * One climate's picture: model build, the two canvases, drawing, and all
+ * pointer interaction — everything Mindscape did before it could switch
+ * climates. Mounted once per climate normally, and twice (outgoing and
+ * incoming) for the ~700ms of a climate switch's crossfade — see Mindscape
+ * below, the only thing that knows a transition is happening.
+ */
+function MindscapeLayer({
   concepts,
   relations,
   seed,
-  climate = "ground",
+  climate,
   highlightIds = [],
   reveal = false,
   interactive = false,
   labels = true,
-  className = "",
   focusIds,
-}: MindscapeProps) {
+}: Omit<MindscapeProps, "className"> & { climate: Climate }) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
   const baseRef = useRef<HTMLCanvasElement>(null);
@@ -288,7 +305,7 @@ export function Mindscape({
   return (
     <div
       ref={wrapRef}
-      className={`relative h-full w-full select-none overflow-hidden ${interactive ? "cursor-grab active:cursor-grabbing" : ""} ${className}`}
+      className={`relative h-full w-full select-none overflow-hidden ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
       onPointerMove={onMove}
       onPointerDown={onDown}
       onPointerUp={onUp}
@@ -313,6 +330,102 @@ export function Mindscape({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// 700ms matches the map's own motion budget (docs/design-language.md: "700ms
+// for anything the map does"), but the app-wide --ease-quiet curve is tuned
+// for the camera settling after a user's own drag/zoom, where getting most
+// of the way there almost immediately reads as responsive. Measured against
+// a real render, that same curve collapsed this transition's visible motion
+// into its first ~150ms, leaving 500ms of an already-settled frame — wrong
+// for a choreographed scene change the eye is meant to track throughout. A
+// symmetric ease-in-out keeps the scale/rise/blur perceptible across the
+// full duration instead. A forward move through CLIMATE_ORDER zooms out —
+// the outgoing layer shrinks toward a point and sinks away while the
+// incoming one settles in from having been too close, drifting up into
+// place. A backward move mirrors every value, so it reads as zooming back
+// in and descending. Reduced motion drops to a plain crossfade.
+const EASE_TRANSITION = [0.65, 0, 0.35, 1] as const;
+const MAP_DURATION = 0.7;
+
+const transitionVariants = {
+  enter: (direction: 1 | -1) => ({
+    opacity: 0,
+    scale: direction === 1 ? 1.12 : 0.88,
+    y: direction === 1 ? -22 : 22,
+    filter: "blur(0px)",
+  }),
+  center: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: MAP_DURATION, ease: EASE_TRANSITION },
+  },
+  exit: (direction: 1 | -1) => ({
+    opacity: 0,
+    scale: direction === 1 ? 0.88 : 1.12,
+    y: direction === 1 ? 22 : -22,
+    filter: "blur(8px)",
+    pointerEvents: "none" as const,
+    transition: { duration: MAP_DURATION, ease: EASE_TRANSITION },
+  }),
+};
+
+const reducedVariants = {
+  enter: { opacity: 0 },
+  center: { opacity: 1, transition: { duration: 0.2 } },
+  exit: { opacity: 0, pointerEvents: "none" as const, transition: { duration: 0.2 } },
+};
+
+/**
+ * The map, animated between climates. Everything about a single climate —
+ * data, canvases, pan/zoom/hover/click — lives in MindscapeLayer above and
+ * is untouched by this; Mindscape's only job is to notice `climate`
+ * changing and crossfade the old picture out while the new one settles in,
+ * in the direction CLIMATE_ORDER says it should.
+ */
+export function Mindscape({ climate = "ground", className = "", ...layerProps }: MindscapeProps) {
+  // Direction is a pure function of (previous climate, next climate), so it
+  // can be derived during render the same way the layer above derives its
+  // view from (previous fit, next fit) — compare against the last-seen
+  // value in state and update if it changed, rather than mutating a ref.
+  const [[prevClimate, direction], setClimateTrack] = useState<[Climate, 1 | -1]>([climate, 1]);
+  if (prevClimate !== climate) {
+    setClimateTrack([climate, directionBetween(prevClimate, climate)]);
+  }
+
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    // Reading the media query can only happen client-side, so a one-time
+    // setState on mount is the correct pattern here, not an anti-pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReducedMotion(mq.matches);
+    const onChange = () => setReducedMotion(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const variants = reducedMotion ? reducedVariants : transitionVariants;
+
+  return (
+    <div className={`relative h-full w-full overflow-hidden ${className}`}>
+      <AnimatePresence mode="sync" initial={false} custom={direction}>
+        <motion.div
+          key={climate}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          className="absolute inset-0"
+        >
+          <MindscapeLayer climate={climate} {...layerProps} />
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
