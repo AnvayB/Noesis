@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { concepts } from "./db/schema";
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
   return name
     .trim()
     .toLowerCase()
@@ -11,17 +11,20 @@ function slugify(name: string): string {
 }
 
 /**
- * Phase 1: sessions tag a single free-text topic, which becomes (or reuses) a
- * Concept row keyed by slug. Understanding/confidence fields on Concept are
- * populated starting in Phase 2 (explain-back analysis) — this just tracks
- * that the concept was encountered.
+ * A concept is keyed by the slug of its name. Meeting it again touches
+ * lastEncounteredAt. A field is recorded the first time one is offered and
+ * kept for life after that, so a concept never moves on the map.
  */
-export async function findOrCreateConcept(name: string): Promise<{ id: string }> {
+export async function findOrCreateConcept(
+  name: string,
+  field?: string | null,
+): Promise<{ id: string; created: boolean }> {
   const db = await getDb();
   const slug = slugify(name);
+  const cleanField = field?.trim() || null;
 
   const existing = await db
-    .select({ id: concepts.id })
+    .select({ id: concepts.id, field: concepts.field })
     .from(concepts)
     .where(eq(concepts.slug, slug))
     .get();
@@ -29,13 +32,16 @@ export async function findOrCreateConcept(name: string): Promise<{ id: string }>
   if (existing) {
     await db
       .update(concepts)
-      .set({ lastEncounteredAt: sql`(current_timestamp)` })
+      .set({
+        lastEncounteredAt: sql`(current_timestamp)`,
+        ...(existing.field || !cleanField ? {} : { field: cleanField }),
+      })
       .where(eq(concepts.id, existing.id))
       .run();
-    return existing;
+    return { id: existing.id, created: false };
   }
 
   const id = crypto.randomUUID();
-  await db.insert(concepts).values({ id, name, slug }).run();
-  return { id };
+  await db.insert(concepts).values({ id, name: name.trim(), slug, field: cleanField }).run();
+  return { id, created: true };
 }

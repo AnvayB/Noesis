@@ -1,342 +1,431 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import type { MapConcept, MapPoint, MapRelation } from "@/lib/mindscape/engine";
+import { buildGroundEcosystem } from "@/lib/mindscape/ground";
+import { buildGrove } from "@/lib/mindscape/grove";
+import { buildSky } from "@/lib/mindscape/sky";
 import {
-  forceCenter,
-  forceCollide,
-  forceLink,
-  forceManyBody,
-  forceSimulation,
-  type SimulationLinkDatum,
-  type SimulationNodeDatum,
-} from "d3-force";
-import { saveConceptLayoutAction } from "@/lib/actions/mindscape";
-import type { MindscapeConcept } from "@/lib/queries";
+  DEFAULT_PALETTE,
+  clampView,
+  drawGenericGlow,
+  drawGround,
+  drawGrove,
+  drawSky,
+  fitView,
+  groveWashPixels,
+  hexToRgb,
+  type Palette,
+  type View,
+} from "@/lib/mindscape/draw";
 
-export interface MindscapeRelationInput {
-  fromConceptId: string;
-  toConceptId: string;
-  strength: number;
-}
+export type Climate = "ground" | "grove" | "sky";
 
-interface Node extends SimulationNodeDatum {
-  id: string;
-  name: string;
-  slug: string;
-  statusLabel: string;
-  hue: string; // a CSS color expression
-  live: boolean;
-  highlight: boolean;
-  radius: number;
-  seed: number;
-}
-
-type LinkDatum = SimulationLinkDatum<Node> & { strength: number; hue: string };
-
-const WIDTH = 800;
-
-// The six field hues. A field is a connected cluster of concepts; a concept
-// that connects to nothing yet is drawn in ink, and gains a hue the first
-// time an explanation joins it to something.
-const HUES = [
-  "var(--teal)",
-  "var(--ochre)",
-  "var(--rose)",
-  "var(--slate)",
-  "var(--moss)",
-  "var(--copper)",
+export const CLIMATES: { id: Climate; label: string; blurb: string }[] = [
+  { id: "ground", label: "Microcosm", blurb: "Domains as colonies, concepts as cells." },
+  { id: "grove", label: "Grove", blurb: "Each field a tree; retention is foliage." },
+  { id: "sky", label: "Nebula", blurb: "Concepts as stars; bridges as light." },
 ];
 
-// Deterministic stand-in for Math.random(), seeded by a string, so every
-// organic detail is stable across renders (useMemo must stay pure).
-function pseudoRandom(seed: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    hash ^= seed.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return ((hash >>> 0) % 10000) / 10000;
+// Ground -> Grove -> Sky is "outward and upward": the cellular scale gives
+// way to the botanical, which gives way to the celestial. Moving forward
+// through this order is a zoom out; moving backward is a descent back in.
+// The transition below reads its direction from this list, not a hardcoded
+// pair, so a fourth climate added at either end stays correct for free.
+const CLIMATE_ORDER: Climate[] = ["ground", "grove", "sky"];
+function directionBetween(from: Climate, to: Climate): 1 | -1 {
+  return CLIMATE_ORDER.indexOf(to) > CLIMATE_ORDER.indexOf(from) ? 1 : -1;
 }
 
-function daysSince(iso: string) {
-  const then = new Date(iso.replace(" ", "T") + "Z").getTime();
-  return (Date.now() - then) / (1000 * 60 * 60 * 24);
+export interface MindscapeProps {
+  concepts: MapConcept[];
+  relations: MapRelation[];
+  seed: string;
+  climate?: Climate;
+  /** Concepts this view is about: named, ringed in lamp, and, when `reveal`
+   * is set, faded in over the sitter's shoulder. */
+  highlightIds?: string[];
+  /** Fade the highlighted concepts in on mount. */
+  reveal?: boolean;
+  /** Pan and zoom with the pointer. On by default on the full page. */
+  interactive?: boolean;
+  /** Draw the faint field names. */
+  labels?: boolean;
+  className?: string;
+  /** Focus the initial view on these concepts instead of everything. */
+  focusIds?: string[];
 }
 
-// Collision radius only; the drawn mark is smaller than the space it keeps.
-function radiusFor(statusLabel: string) {
-  if (statusLabel === "Retained") return 22;
-  if (statusLabel === "Can Explain") return 18;
-  if (statusLabel === "Familiar") return 12;
-  return 8;
-}
-
-function fieldHues(concepts: MindscapeConcept[], relations: MindscapeRelationInput[]) {
-  const parent = new Map<string, string>();
-  const find = (x: string): string => {
-    let p = parent.get(x) ?? x;
-    while (p !== x) {
-      x = p;
-      p = parent.get(x) ?? x;
-    }
-    return p;
+function readPalette(el: HTMLElement): Palette {
+  const cs = getComputedStyle(el);
+  const night = document.documentElement.classList.contains("dark");
+  const base = night ? DEFAULT_PALETTE.night : DEFAULT_PALETTE.day;
+  const v = (name: string) => cs.getPropertyValue(name).trim();
+  return {
+    ...base,
+    paper: v("--paper") ? hexToRgb(v("--paper")) : base.paper,
+    ink: v("--ink") ? hexToRgb(v("--ink")) : base.ink,
+    inkSoft: v("--ink-soft") ? hexToRgb(v("--ink-soft")) : base.inkSoft,
+    lamp: v("--lamp") || base.lamp,
   };
-  for (const c of concepts) parent.set(c.id, c.id);
-  for (const r of relations) {
-    if (!parent.has(r.fromConceptId) || !parent.has(r.toConceptId)) continue;
-    const a = find(r.fromConceptId), b = find(r.toConceptId);
-    if (a !== b) parent.set(a, b);
-  }
-  const members = new Map<string, MindscapeConcept[]>();
-  for (const c of concepts) {
-    const root = find(c.id);
-    members.set(root, [...(members.get(root) ?? []), c]);
-  }
-  const hueOf = new Map<string, string>();
-  const taken = new Set<number>();
-  for (const [root, list] of members) {
-    if (list.length < 2) {
-      for (const c of list) hueOf.set(c.id, "var(--ink)");
-      continue;
-    }
-    const anchor = list.map((c) => c.slug).sort()[0];
-    let idx = Math.floor(pseudoRandom("field:" + anchor) * HUES.length);
-    let tries = 0;
-    while (taken.has(idx) && tries++ < HUES.length) idx = (idx + 1) % HUES.length;
-    taken.add(idx);
-    for (const c of list) hueOf.set(c.id, HUES[idx]);
-    void root;
-  }
-  return hueOf;
 }
 
-// Short threads reaching out from a mark, the way an explanation reaches
-// toward what it relates to. Deterministic per concept.
-function threads(n: Node, count: number, length: number) {
-  const out: string[] = [];
-  const x = n.x ?? 0, y = n.y ?? 0;
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2 + n.seed * Math.PI * 2;
-    const L = length * (0.65 + 0.7 * pseudoRandom(n.id + ":t" + i));
-    const bend = (pseudoRandom(n.id + ":b" + i) - 0.5) * L * 0.9;
-    const ex = x + Math.cos(a) * L, ey = y + Math.sin(a) * L;
-    const cx = x + Math.cos(a) * L * 0.5 + Math.cos(a + Math.PI / 2) * bend;
-    const cy = y + Math.sin(a) * L * 0.5 + Math.sin(a + Math.PI / 2) * bend;
-    out.push(`M${x.toFixed(1)} ${y.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`);
-  }
-  return out;
+// Grove's meadow wash is painted as a small G×G image and scaled up with smoothing.
+function paintGroveWash(model: { grid: number; relief: Float32Array; groundY: number; height: number }, pal: Palette): HTMLCanvasElement {
+  const G = model.grid;
+  const off = document.createElement("canvas");
+  off.width = G; off.height = G;
+  const ctx = off.getContext("2d")!;
+  const img = ctx.createImageData(G, G);
+  img.data.set(groveWashPixels(model as Parameters<typeof groveWashPixels>[0], pal));
+  ctx.putImageData(img, 0, 0);
+  return off;
 }
 
-function cord(a: Node, b: Node, seed: string) {
-  const ax = a.x ?? 0, ay = a.y ?? 0, bx = b.x ?? 0, by = b.y ?? 0;
-  const mx = (ax + bx) / 2, my = (ay + by) / 2;
-  const dx = bx - ax, dy = by - ay;
-  const len = Math.hypot(dx, dy) || 1;
-  const side = pseudoRandom(seed) < 0.5 ? -1 : 1;
-  const off = len * 0.14 * side;
-  const cx = mx + (-dy / len) * off, cy = my + (dx / len) * off;
-  return `M${ax.toFixed(1)} ${ay.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}`;
-}
-
-export function Mindscape({
+/**
+ * One climate's picture: model build, the two canvases, drawing, and all
+ * pointer interaction — everything Mindscape did before it could switch
+ * climates. Mounted once per climate normally, and twice (outgoing and
+ * incoming) for the ~700ms of a climate switch's crossfade — see Mindscape
+ * below, the only thing that knows a transition is happening.
+ */
+function MindscapeLayer({
   concepts,
   relations,
-  height = 400,
+  seed,
+  climate,
   highlightIds = [],
-}: {
-  concepts: MindscapeConcept[];
-  relations: MindscapeRelationInput[];
-  height?: number;
-  /** Concepts this view is about: drawn with a lamp ring and a full label. */
-  highlightIds?: string[];
-}) {
-  // Keyed on the joined ids so a fresh array literal from the parent does
-  // not re-run the layout on every render.
+  reveal = false,
+  interactive = false,
+  labels = true,
+  focusIds,
+}: Omit<MindscapeProps, "className"> & { climate: Climate }) {
+  const router = useRouter();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const baseRef = useRef<HTMLCanvasElement>(null);
+  const overRef = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [hover, setHover] = useState<{ id: string; name: string; x: number; y: number } | null>(null);
+  const viewRef = useRef<View | null>(null);
+  const [view, setView] = useState<View | null>(null);
+  const dragRef = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
+  const [themeTick, setThemeTick] = useState(0);
+  const revealStart = useRef<number | null>(null);
+
   const highlightKey = highlightIds.join("|");
-  const highlightSet = useMemo(
-    () => new Set(highlightKey ? highlightKey.split("|") : []),
-    [highlightKey],
-  );
-  const { nodes, links } = useMemo(() => {
-    if (concepts.length === 0) {
-      return { nodes: [] as Node[], links: [] as LinkDatum[] };
-    }
-    const hueOf = fieldHues(concepts, relations);
+  const highlightSet = useMemo(() => new Set(highlightKey ? highlightKey.split("|") : []), [highlightKey]);
+  const focusKey = (focusIds ?? []).join("|");
+  const focusSet = useMemo(() => new Set(focusKey ? focusKey.split("|") : []), [focusKey]);
 
-    const nodeData: Node[] = concepts.map((c) => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      statusLabel: c.statusLabel,
-      hue: hueOf.get(c.id) ?? "var(--ink)",
-      // Touched in the last two weeks. Nothing else in the picture is about
-      // time: there is no fade, only a glow on what is happening now.
-      live: daysSince(c.lastReviewedAt ?? c.lastEncounteredAt) <= 14,
-      highlight: highlightSet.has(c.id),
-      radius: radiusFor(c.statusLabel),
-      seed: pseudoRandom(c.id),
-      x: c.layoutX ?? WIDTH / 2 + (pseudoRandom(c.id + "x") - 0.5) * 160,
-      y: c.layoutY ?? height / 2 + (pseudoRandom(c.id + "y") - 0.5) * 160,
-    }));
+  const input = useMemo(() => ({ concepts, relations, seed }), [concepts, relations, seed]);
+  const groundModel = useMemo(() => (climate === "ground" ? buildGroundEcosystem(input) : null), [climate, input]);
+  const groveModel = useMemo(() => (climate === "grove" ? buildGrove(input) : null), [climate, input]);
+  const skyModel = useMemo(() => (climate === "sky" ? buildSky(input) : null), [climate, input]);
+  const model = groundModel ?? groveModel ?? skyModel!;
+  const points: MapPoint[] = model.points;
 
-    const byId = new Map(nodeData.map((n) => [n.id, n]));
-    const linkData: LinkDatum[] = relations
-      .filter((r) => byId.has(r.fromConceptId) && byId.has(r.toConceptId))
-      .map((r) => ({
-        source: r.fromConceptId,
-        target: r.toConceptId,
-        strength: r.strength,
-        hue: byId.get(r.fromConceptId)!.hue,
-      }));
-
-    const simulation = forceSimulation(nodeData)
-      .force("charge", forceManyBody().strength(-160))
-      .force(
-        "link",
-        forceLink<Node, LinkDatum>(linkData)
-          .id((d) => d.id)
-          .distance(110),
-      )
-      .force("center", forceCenter(WIDTH / 2, height / 2))
-      .force(
-        "collide",
-        forceCollide<Node>((d) => d.radius + 22),
-      )
-      .stop();
-
-    // Settle synchronously: a landscape, not a bouncing simulation.
-    simulation.tick(220);
-    return { nodes: nodeData, links: linkData };
-  }, [concepts, relations, height, highlightSet]);
-
+  // Size to the container; redraw on resize.
   useEffect(() => {
-    if (nodes.length === 0) return;
-    saveConceptLayoutAction(
-      nodes.map((n) => ({ id: n.id, x: n.x ?? 0, y: n.y ?? 0 })),
-    ).catch(() => {
-      // Best-effort cache — a failed write just means next visit re-settles.
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setSize({ w: Math.round(r.width), h: Math.round(r.height) });
     });
-  }, [nodes]);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  if (concepts.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center px-8 text-center">
-        <p className="question max-w-md text-ink-soft">
-          Nothing on the map yet. Explain something you have learned and it
-          will begin here.
-        </p>
-      </div>
-    );
+  // Theme changes flip the .dark class on <html>.
+  useEffect(() => {
+    const mo = new MutationObserver(() => setThemeTick((t) => t + 1));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+
+  // Fit the view whenever the model or size changes; pan and zoom adjust
+  // it from there. Computed during render, not in an effect.
+  const fitted = useMemo(
+    () =>
+      size.w && size.h
+        ? fitView(model, size.w, size.h, focusSet.size ? focusSet : highlightSet.size && reveal ? highlightSet : undefined)
+        : null,
+    [model, size, focusSet, highlightSet, reveal],
+  );
+  const [fitSource, setFitSource] = useState<View | null>(null);
+  if (fitted !== fitSource) {
+    setFitSource(fitted);
+    setView(fitted);
   }
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  // Base layer: everything still.
+  const groveWashRef = useRef<{ key: string; img: HTMLCanvasElement } | null>(null);
+  useEffect(() => {
+    const canvas = baseRef.current, wrap = wrapRef.current;
+    if (!canvas || !view || !wrap || !size.w) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = size.w * dpr; canvas.height = size.h * dpr;
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr, dpr);
+    const pal = readPalette(wrap);
+    const scaled = { scale: view.scale, tx: view.tx, ty: view.ty };
+    const skipSet = reveal ? highlightSet : new Set<string>();
+
+    if (groundModel) {
+      drawGround(ctx, groundModel, pal, scaled, size.w, size.h, skipSet);
+    } else if (groveModel) {
+      const key = `${pal.night}|${groveModel.branches.length}|${seed}`;
+      if (!groveWashRef.current || groveWashRef.current.key !== key) {
+        groveWashRef.current = { key, img: paintGroveWash(groveModel, pal) };
+      }
+      drawGrove(ctx, groveModel, pal, scaled, size.w, size.h, skipSet, groveWashRef.current.img);
+    } else if (skyModel) {
+      drawSky(ctx, skyModel, pal, scaled, size.w, size.h, skipSet);
+    }
+  }, [groundModel, groveModel, skyModel, size, view, themeTick, reveal, highlightSet, labels, seed]);
+
+  // Overlay: what is happening now, and a fade-in for what a reveal is about.
+  useEffect(() => {
+    const canvas = overRef.current, wrap = wrapRef.current;
+    if (!canvas || !wrap || !size.w || !view) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = size.w * dpr; canvas.height = size.h * dpr;
+    const ctx = canvas.getContext("2d")!;
+    const pal = readPalette(wrap);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reveal && revealStart.current === null) revealStart.current = performance.now() + 250;
+    let raf = 0;
+    const REVEAL_MS = 1100;
+
+    const liveIds = new Set(
+      groundModel
+        ? groundModel.cells.filter((c) => c.live).map((c) => c.id)
+        : groveModel
+          ? groveModel.branches.filter((b) => b.live).map((b) => b.id)
+          : skyModel!.stars.filter((s) => s.live).map((s) => s.id),
+    );
+
+    const frame = (t: number) => {
+      const view = viewRef.current;
+      if (!view) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, size.w, size.h);
+      ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.tx * dpr, view.ty * dpr);
+
+      let revealDone = true;
+      if (reveal && highlightSet.size > 0) {
+        const f = reduced ? 1 : Math.min(1, Math.max(0, (t - (revealStart.current ?? t)) / REVEAL_MS));
+        revealDone = f >= 1;
+        ctx.save();
+        ctx.globalAlpha = 1 - Math.pow(1 - f, 3);
+        if (groundModel) drawGround(ctx, groundModel, pal, view, size.w, size.h, new Set());
+        else if (groveModel) drawGrove(ctx, groveModel, pal, view, size.w, size.h, new Set());
+        else if (skyModel) drawSky(ctx, skyModel, pal, view, size.w, size.h, new Set());
+        ctx.restore();
+      }
+
+      const breathe = reduced ? 0.8 : 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t / 640));
+      drawGenericGlow(ctx, points, liveIds, highlightSet, pal, view, breathe);
+      if (!reduced && (liveIds.size > 0 || highlightSet.size > 0 || !revealDone)) raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [groundModel, groveModel, skyModel, points, size, view, themeTick, reveal, highlightSet]);
+
+  // Pointer: hover names a point; click opens it; drag pans; wheel zooms.
+  function toWorld(e: { clientX: number; clientY: number }) {
+    const el = wrapRef.current!, view = viewRef.current!;
+    const r = el.getBoundingClientRect();
+    const sx = e.clientX - r.left, sy = e.clientY - r.top;
+    return { x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale, sx, sy };
+  }
+  function nearest(wx: number, wy: number) {
+    const view = viewRef.current!;
+    const reach = 16 / view.scale + 6;
+    let best: MapPoint | null = null, bd = reach;
+    for (const p of points) {
+      const d = Math.hypot(p.x - wx, p.y - wy);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+  function onMove(e: React.PointerEvent) {
+    if (!viewRef.current) return;
+    if (dragRef.current && interactive) {
+      const d = dragRef.current;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      setView(clampView(model, { ...viewRef.current, tx: d.tx + dx, ty: d.ty + dy }, size.w, size.h));
+      return;
+    }
+    const { x, y, sx, sy } = toWorld(e);
+    const p = nearest(x, y);
+    setHover(p ? { id: p.id, name: p.name, x: sx, y: sy } : null);
+  }
+  function onDown(e: React.PointerEvent) {
+    if (!interactive || !viewRef.current) return;
+    dragRef.current = { x: e.clientX, y: e.clientY, tx: viewRef.current.tx, ty: viewRef.current.ty, moved: false };
+  }
+  function onUp(e: React.PointerEvent) {
+    const wasDrag = dragRef.current?.moved;
+    dragRef.current = null;
+    if (wasDrag || !viewRef.current) return;
+    const { x, y } = toWorld(e);
+    const p = nearest(x, y);
+    if (p) router.push(`/concepts/${p.slug}`);
+  }
+  // Wheel zoom needs a non-passive listener to stop the page scrolling,
+  // which React's synthetic wheel event cannot do.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || !interactive) return;
+    const onWheel = (e: WheelEvent) => {
+      const v = viewRef.current;
+      if (!v) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const sx = e.clientX - r.left, sy = e.clientY - r.top;
+      const k = Math.exp(-e.deltaY * 0.0015);
+      const scale = Math.min(6, Math.max(0.12, v.scale * k));
+      const ratio = scale / v.scale;
+      setView(clampView(model, { scale, tx: sx - (sx - v.tx) * ratio, ty: sy - (sy - v.ty) * ratio }, size.w, size.h));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [interactive, model, size]);
+
+  const empty = concepts.length === 0;
+  const emptyWord = climate === "grove" ? "No trees yet." : climate === "sky" ? "An empty sky, so far." : "Nothing growing yet.";
 
   return (
-    <svg
-      viewBox={`0 0 ${WIDTH} ${height}`}
-      className="h-full w-full"
+    <div
+      ref={wrapRef}
+      className={`relative h-full w-full select-none overflow-hidden ${interactive ? "cursor-grab active:cursor-grabbing" : ""}`}
+      onPointerMove={onMove}
+      onPointerDown={onDown}
+      onPointerUp={onUp}
+      onPointerLeave={() => { setHover(null); dragRef.current = null; }}
       role="img"
-      aria-label="Your Mindscape"
+      aria-label={empty ? "Your Mindscape, still empty" : "Your Mindscape"}
     >
-      <style>{`
-        .ms-node text { transition: opacity 240ms cubic-bezier(.2,.7,.2,1), fill 240ms; }
-        .ms-node:hover text { opacity: 1; fill: var(--ink); }
-        .ms-live { animation: breathe 4s cubic-bezier(.2,.7,.2,1) infinite; }
-        @media (prefers-reduced-motion: reduce) { .ms-live { animation: none; } }
-      `}</style>
+      <canvas ref={baseRef} className="absolute inset-0 h-full w-full" style={{ width: size.w, height: size.h }} />
+      <canvas ref={overRef} className="absolute inset-0 h-full w-full" style={{ width: size.w, height: size.h }} />
+      {hover && !highlightSet.has(hover.id) && (
+        <div
+          className={`pointer-events-none absolute -translate-x-1/2 whitespace-nowrap font-serif text-[14px] italic ${climate === "sky" ? "text-[#e5e3ee]" : "text-ink"}`}
+          style={{ left: hover.x, top: hover.y + 14 }}
+        >
+          {hover.name}
+        </div>
+      )}
+      {empty && (
+        <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-10">
+          <p className={`question max-w-md text-center ${climate === "sky" ? "text-[#b7b6c4]" : "text-ink-soft"}`}>
+            {emptyWord} Explain something you have learned and the first marks appear here.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* Cords between related concepts, in the field's hue. */}
-      <g fill="none" strokeLinecap="round">
-        {links.map((l, i) => {
-          const s = typeof l.source === "object" ? (l.source as Node) : undefined;
-          const t = typeof l.target === "object" ? (l.target as Node) : undefined;
-          if (!s || !t) return null;
-          return (
-            <path
-              key={i}
-              d={cord(s, t, s.id + t.id)}
-              stroke={l.hue}
-              strokeOpacity={0.55}
-              strokeWidth={Math.min(0.8 + l.strength * 0.5, 3)}
-            />
-          );
-        })}
-      </g>
+// 700ms matches the map's own motion budget (docs/design-language.md: "700ms
+// for anything the map does"), but the app-wide --ease-quiet curve is tuned
+// for the camera settling after a user's own drag/zoom, where getting most
+// of the way there almost immediately reads as responsive. Measured against
+// a real render, that same curve collapsed this transition's visible motion
+// into its first ~150ms, leaving 500ms of an already-settled frame — wrong
+// for a choreographed scene change the eye is meant to track throughout. A
+// symmetric ease-in-out keeps the scale/rise/blur perceptible across the
+// full duration instead. A forward move through CLIMATE_ORDER zooms out —
+// the outgoing layer shrinks toward a point and sinks away while the
+// incoming one settles in from having been too close, drifting up into
+// place. A backward move mirrors every value, so it reads as zooming back
+// in and descending. Reduced motion drops to a plain crossfade.
+const EASE_TRANSITION = [0.65, 0, 0.35, 1] as const;
+const MAP_DURATION = 0.7;
 
-      {/* Marks. Nothing here is a circle with a label in it. */}
-      <g>
-        {nodes.map((n) => {
-          const x = n.x ?? 0, y = n.y ?? 0;
-          const status = n.statusLabel;
-          return (
-            <g key={n.id} className="ms-node">
-              {(n.live || n.highlight) && (
-                <circle
-                  className="ms-live"
-                  cx={x}
-                  cy={y}
-                  r={n.highlight ? 22 : 16}
-                  fill="var(--lamp)"
-                  fillOpacity={n.highlight ? 0.26 : 0.18}
-                />
-              )}
-              {n.highlight && (
-                <circle cx={x} cy={y} r={26} fill="none" stroke="var(--lamp)" strokeOpacity={0.7} strokeWidth={0.9} />
-              )}
-              <a href={`/concepts/${n.slug}`}>
-                {/* Retained knowledge carries contours: it has settled into ground. */}
-                {status === "Retained" && (
-                  <g fill="none" stroke={n.hue}>
-                    <circle cx={x} cy={y} r={11} strokeOpacity={0.45} strokeWidth={0.7} />
-                    <circle cx={x} cy={y} r={17.5} strokeOpacity={0.25} strokeWidth={0.7} />
-                  </g>
-                )}
-                {/* Threads reach outward for anything that has been explained. */}
-                {(status === "Retained" || status === "Can Explain") && (
-                  <g fill="none" stroke={n.hue} strokeWidth={0.9} strokeOpacity={0.85} strokeLinecap="round">
-                    {threads(n, status === "Retained" ? 8 : 7, status === "Retained" ? 15 : 13).map((d, i) => (
-                      <path key={i} d={d} />
-                    ))}
-                  </g>
-                )}
-                {status === "Familiar" && (
-                  <g fill="none" stroke={n.hue} strokeWidth={0.8} strokeOpacity={0.8} strokeLinecap="round">
-                    {threads(n, 3, 9).map((d, i) => (
-                      <path key={i} d={d} />
-                    ))}
-                    <circle cx={x} cy={y} r={4.5} />
-                  </g>
-                )}
-                {status === "Encountered" ? (
-                  // A spore: met, not yet explained.
-                  <path
-                    d={`M${(x - 3).toFixed(1)} ${(y + 2.5).toFixed(1)} q2.5 -6 6.5 -3.5`}
-                    fill="none"
-                    stroke={n.hue}
-                    strokeWidth={1}
-                    strokeOpacity={0.8}
-                    strokeLinecap="round"
-                  />
-                ) : status !== "Familiar" ? (
-                  <circle cx={x} cy={y} r={status === "Retained" ? 5 : 4.2} fill={n.hue} />
-                ) : null}
-                <text
-                  x={x}
-                  y={y + (status === "Retained" ? 30 : status === "Encountered" ? 15 : 24)}
-                  textAnchor="middle"
-                  fill={n.highlight ? "var(--ink)" : "var(--ink-soft)"}
-                  opacity={n.highlight ? 1 : 0.85}
-                  style={{
-                    fontFamily: "var(--font-fraunces), Georgia, serif",
-                    fontStyle: "italic",
-                    fontSize: 12,
-                  }}
-                >
-                  {n.name}
-                </text>
-              </a>
-            </g>
-          );
-        })}
-      </g>
-    </svg>
+const transitionVariants = {
+  enter: (direction: 1 | -1) => ({
+    opacity: 0,
+    scale: direction === 1 ? 1.12 : 0.88,
+    y: direction === 1 ? -22 : 22,
+    filter: "blur(0px)",
+  }),
+  center: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: MAP_DURATION, ease: EASE_TRANSITION },
+  },
+  exit: (direction: 1 | -1) => ({
+    opacity: 0,
+    scale: direction === 1 ? 0.88 : 1.12,
+    y: direction === 1 ? 22 : -22,
+    filter: "blur(8px)",
+    pointerEvents: "none" as const,
+    transition: { duration: MAP_DURATION, ease: EASE_TRANSITION },
+  }),
+};
+
+const reducedVariants = {
+  enter: { opacity: 0 },
+  center: { opacity: 1, transition: { duration: 0.2 } },
+  exit: { opacity: 0, pointerEvents: "none" as const, transition: { duration: 0.2 } },
+};
+
+/**
+ * The map, animated between climates. Everything about a single climate —
+ * data, canvases, pan/zoom/hover/click — lives in MindscapeLayer above and
+ * is untouched by this; Mindscape's only job is to notice `climate`
+ * changing and crossfade the old picture out while the new one settles in,
+ * in the direction CLIMATE_ORDER says it should.
+ */
+export function Mindscape({ climate = "ground", className = "", ...layerProps }: MindscapeProps) {
+  // Direction is a pure function of (previous climate, next climate), so it
+  // can be derived during render the same way the layer above derives its
+  // view from (previous fit, next fit) — compare against the last-seen
+  // value in state and update if it changed, rather than mutating a ref.
+  const [[prevClimate, direction], setClimateTrack] = useState<[Climate, 1 | -1]>([climate, 1]);
+  if (prevClimate !== climate) {
+    setClimateTrack([climate, directionBetween(prevClimate, climate)]);
+  }
+
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    // Reading the media query can only happen client-side, so a one-time
+    // setState on mount is the correct pattern here, not an anti-pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReducedMotion(mq.matches);
+    const onChange = () => setReducedMotion(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const variants = reducedMotion ? reducedVariants : transitionVariants;
+
+  return (
+    <div className={`relative h-full w-full overflow-hidden ${className}`}>
+      <AnimatePresence mode="sync" initial={false} custom={direction}>
+        <motion.div
+          key={climate}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          className="absolute inset-0"
+        >
+          <MindscapeLayer climate={climate} {...layerProps} />
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LearnNav } from "@/components/LearnNav";
 import { NavHeader } from "@/components/NavHeader";
 import { NewSessionSubmitButtons } from "@/components/NewSessionSubmitButtons";
 import { SessionTitleTopicFields } from "@/components/SessionTitleTopicFields";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function NewSessionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ curiosityItemId?: string; topic?: string }>;
+  searchParams: Promise<{ curiosityItemId?: string; topic?: string; title?: string }>;
 }) {
   const params = await searchParams;
 
@@ -18,11 +19,13 @@ export default async function NewSessionPage({
     <div className="flex flex-1 flex-col">
       <NavHeader active="Learn" />
 
-      <main className="page-enter mx-auto flex w-full max-w-xl flex-1 flex-col gap-10 px-6 py-14 sm:px-10">
-        <div className="flex flex-col gap-2">
-          <h1 className="title text-[40px]">Start something</h1>
+      <main className="page-enter mx-auto flex w-full max-w-xl flex-1 flex-col gap-10 px-6 py-12 sm:px-10 sm:py-14">
+        <div className="flex flex-col gap-5">
+          <h1 className="title text-[40px]">Add with details</h1>
+          <LearnNav active="Add with details" />
           <p className="meta">
-            Only the first two lines matter. The rest can wait, or be skipped.
+            For logging a session with everything you know about it, or keeping one for later with
+            notes. Only the title is required; a link is read for its text.
           </p>
         </div>
 
@@ -32,7 +35,7 @@ export default async function NewSessionPage({
           )}
 
           <div className="flex flex-col gap-6">
-            <SessionTitleTopicFields defaultTopic={params.topic ?? ""} />
+            <SessionTitleTopicFields defaultTitle={params.title ?? ""} defaultTopic={params.topic ?? ""} />
           </div>
 
           <div className="flex flex-col gap-6 border-t border-rule pt-8">
@@ -40,7 +43,7 @@ export default async function NewSessionPage({
 
             <label className="flex flex-col gap-1">
               <span className="meta">Link</span>
-              <input name="resourceUrl" placeholder="https://" className="field" />
+              <input name="resourceUrl" placeholder="https://" className="field" autoComplete="off" />
             </label>
 
             <label className="flex flex-col gap-1">
@@ -49,6 +52,7 @@ export default async function NewSessionPage({
                 name="resourceTitle"
                 placeholder="If the link doesn't say it"
                 className="field"
+                autoComplete="off"
               />
             </label>
 
@@ -77,7 +81,7 @@ export default async function NewSessionPage({
 
             <fieldset className="flex flex-col gap-2">
               <legend className="meta mb-2">Attention</legend>
-              <div className="flex gap-6 text-[15px]">
+              <div className="flex flex-wrap gap-6 text-[15px]">
                 <label className="flex items-center gap-2">
                   <input type="radio" name="environmentMode" value="focus" defaultChecked className="radio" />
                   Focused
@@ -91,7 +95,7 @@ export default async function NewSessionPage({
 
             <fieldset className="flex flex-col gap-2">
               <legend className="meta mb-2">Doing</legend>
-              <div className="flex gap-6 text-[15px]">
+              <div className="flex flex-wrap gap-6 text-[15px]">
                 <label className="flex items-center gap-2">
                   <input type="radio" name="activityMode" value="consume" defaultChecked className="radio" />
                   Taking it in

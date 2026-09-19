@@ -52,10 +52,10 @@ export default async function ConceptDetailPage({
     getRecallHistoryForConcept(concept.id),
   ]);
   const statusLabel = deriveConceptStatusLabel(
-    history.map((h) => h.status),
+    history.map((h) => ({ at: h.createdAt, status: h.status })),
     recallHistory
-      .map((r) => r.outcome)
-      .filter((o): o is RecallOutcome => o !== null),
+      .filter((r): r is typeof r & { outcome: RecallOutcome; answeredAt: string } => r.outcome !== null && r.answeredAt !== null)
+      .map((r) => ({ at: r.answeredAt, outcome: r.outcome })),
   );
   const answered = recallHistory.filter((r) => r.outcome);
 
@@ -65,7 +65,7 @@ export default async function ConceptDetailPage({
 
       <main className="page-enter mx-auto flex w-full max-w-2xl flex-1 flex-col gap-12 px-6 py-14 sm:px-10">
         <header className="flex flex-col gap-3">
-          <p className="meta">On the map</p>
+          <p className="meta">On the map{concept.field ? `, in ${concept.field}` : ""}</p>
           <h1 className="title text-[44px] sm:text-[52px]">{concept.name}</h1>
           <p className="reading text-[17px] text-ink-soft">
             {STATUS_SENTENCE[statusLabel] ?? STATUS_SENTENCE.Encountered}
@@ -91,7 +91,9 @@ export default async function ConceptDetailPage({
                   </div>
                   <span className="meta">
                     {EXPLAIN_BACK_STATUS_LABEL[h.status] ?? h.status}, {DEPTH_WORD[h.depth] ?? h.depth}
+                    {h.level ? `, at ${h.level} of five` : ""}
                   </span>
+                  {h.gist && <span className="reading text-[15px] text-ink-soft">{h.gist}</span>}
                 </li>
               ))}
             </ul>

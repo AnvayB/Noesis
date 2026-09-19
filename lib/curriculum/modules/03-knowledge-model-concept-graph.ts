@@ -15,12 +15,12 @@ export const knowledgeModelConceptGraph: CurriculumModule = {
       {
         heading: "Nodes: Concept, derived not cached",
         body:
-          "A Concept row (lib/db/schema.ts) stores identity (name, slug) and timestamps (firstEncounteredAt, lastEncounteredAt, lastReviewedAt) plus a cached layoutX/layoutY for the visualization — but notably no confidence score. Instead, deriveConceptStatusLabel in lib/queries.ts computes a status label ('Encountered' → 'Familiar' → 'Can Explain' → 'Retained') on every read, from the concept's explainBackConcepts statuses and recallAttempts outcomes. If the underlying evidence changes, the derived label changes automatically on the next read — there's no cached field that could go stale.",
+          "A Concept row (lib/db/schema.ts) stores identity (name, slug), a field (the broad topic area the model assigns it — 'Machine learning', 'Baking' — kept for life once set, and what a Mindscape climate groups by), and timestamps (firstEncounteredAt, lastEncounteredAt, lastReviewedAt) — but notably no confidence score. Standing ('Encountered' → 'Familiar' → 'Can Explain' → 'Retained') is computed fresh on every read by deriveStanding in lib/knowledge.ts, from the concept's explainBackConcepts statuses and recallAttempts outcomes (lib/queries.ts's deriveConceptStatusLabel is now a thin wrapper over the same function, kept so existing call sites didn't all need touching). Retained is deliberately harder to reach than 'any successful recall': it requires either a remembered recall outcome, or two correct explanations at least two weeks apart — a single correct explain-back only ever reaches 'Can Explain', however deep it was. If the underlying evidence changes, the derived label changes automatically on the next read — there's no cached field that could go stale.",
       },
       {
         heading: "Edges: ConceptRelations and co-occurrence strength",
         body:
-          "A conceptRelations row links two concepts with a relationType ('related', 'prerequisite', 'part_of'), a source ('llm_inferred' or 'manual'), and a strength integer. Strength isn't set once — lib/actions/explainBack.ts checks both directions of an existing pair (A→B or B→A; 'related' edges are treated as conceptually undirected) and increments strength on the existing row if found, or inserts strength: 1 if not. So an edge that gets re-asserted across several different explain-backs grows visibly stronger over time — Mindscape uses this directly to draw thicker lines for edges the model has independently reinforced multiple times.",
+          "A conceptRelations row links two concepts with a relationType ('related', 'prerequisite', 'part_of'), a source, and a strength integer. Source has three values, and the distinction matters beyond bookkeeping: 'explained' means the learner stated the connection themselves during an explain-back; 'llm_inferred' means the model noticed the material plainly relates to something known, without the learner saying so; 'manual' is hand-entered. Only an 'explained' (or manual) relation is treated as a real, fusable connection by Mindscape — an llm_inferred one still steers where new growth reaches toward, but can never itself become the cord/bloom mark that means 'you made this connection.' Strength isn't set once — lib/actions/explainBack.ts checks both directions of an existing pair (A→B or B→A; edges are treated as conceptually undirected) and increments strength on the existing row if found, or inserts strength: 1 if not; if a later explain-back re-asserts a pair that was previously only llm_inferred, its source is promoted to 'explained' rather than staying stuck at the weaker kind forever.",
       },
       {
         heading: "The theory: incremental graph construction and denormalization risk",
@@ -32,6 +32,7 @@ export const knowledgeModelConceptGraph: CurriculumModule = {
       "lib/db/schema.ts",
       "lib/concepts.ts",
       "lib/actions/explainBack.ts",
+      "lib/knowledge.ts",
       "lib/queries.ts",
     ],
   },
@@ -40,13 +41,13 @@ export const knowledgeModelConceptGraph: CurriculumModule = {
       prompt:
         "Explain, in your own words, how a Concept's understanding status gets computed, and how a ConceptRelation's strength grows over time.",
       groundTruth:
-        "Status is never stored — deriveConceptStatusLabel(statuses, recallOutcomes) in lib/queries.ts computes it fresh from every explainBackConcepts status and recallAttempts outcome tied to that concept ('Retained' if any recall outcome is 'remembered'; otherwise the best explain-back status seen, 'correct'→'Can Explain', 'partial'→'Familiar', else 'Encountered'). Relation strength starts at 1 when a pair of concepts is first connected by the LLM's connectionsMade output, and is incremented (not replaced) each time the same pair — checked in either direction — is asserted again by a later explain-back, via an update in lib/actions/explainBack.ts.",
+        "Status is never stored — deriveStanding(explanations, recalls) in lib/knowledge.ts computes it fresh from every explainBackConcepts status/timestamp and recallAttempts outcome tied to that concept: 'Retained' if any recall was remembered, or if two explanations were marked correct at least two weeks apart; otherwise the best status seen, 'correct'→'Can Explain', 'partial'→'Familiar', else 'Encountered'. Relation strength starts at 1 when a pair of concepts is first connected, and is incremented (not replaced) each time the same pair — checked in either direction — is asserted again by a later explain-back, via an update in lib/actions/explainBack.ts.",
     },
     trace: {
       prompt:
         "Trace what happens, from an explain-back analysis coming back from the LLM to a new or strengthened edge appearing in conceptRelations.",
       groundTruth:
-        "After ai.analyzeExplainBack() returns, lib/actions/explainBack.ts builds a canonicalNameByLower map from the analysis's own conceptsAddressed plus the prior known concept names passed into the call. For each entry in analysis.connectionsMade, it looks up both 'from' and 'to' against that map (case-insensitive, trimmed) — if either fails to resolve, the connection is silently dropped. For a resolved pair, it calls findOrCreateConcept on both names (lib/concepts.ts, which slugifies and either finds an existing row or inserts a new one), skips if they resolved to the same concept, then queries conceptRelations for an existing row in either direction; if found it increments strength, otherwise it inserts a new row with strength: 1, relationType: 'related', source: 'llm_inferred'.",
+        "After ai.analyzeExplainBack() returns, lib/actions/explainBack.ts builds a canonicalNameByLower map from the analysis's own conceptsAddressed plus everything already on the map, and resolves each connectionsMade pair against it (a short, unresolved name may be allowed to create a new concept; a long or clause-like one is dropped rather than fragmenting the graph). For a resolved pair it calls findOrCreateConcept on both names (lib/concepts.ts), skips if they resolved to the same concept, then queries conceptRelations for an existing row in either direction: if found, it increments strength and — since this pair came from connectionsMade, meaning the learner stated it — promotes source to 'explained' if it wasn't already; if not found, it inserts a new row with strength: 1, source: 'explained'. relatedKnown pairs go through the same lookup but are recorded with source: 'llm_inferred' instead, and can never promote an existing relation.",
     },
     modify: {
       prompt:

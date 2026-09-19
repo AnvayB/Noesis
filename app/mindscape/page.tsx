@@ -1,29 +1,32 @@
-import { Mindscape } from "@/components/Mindscape";
+import Link from "next/link";
+import { MindscapeExplorer } from "@/components/MindscapeExplorer";
 import { NavHeader } from "@/components/NavHeader";
-import { listMindscapeConcepts, listMindscapeRelations } from "@/lib/queries";
+import { getMindscapeData } from "@/lib/queries";
+import { getMindscapeSeed } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
 
 export default async function MindscapePage() {
-  const [concepts, relations] = await Promise.all([
-    listMindscapeConcepts(),
-    listMindscapeRelations(),
-  ]);
+  const state = await getMindscapeData();
+  const fields = [...new Set(state.concepts.map((c) => c.field).filter((f): f is string => !!f))];
 
   return (
     <div className="flex flex-1 flex-col">
       <NavHeader active="Mindscape" />
 
       <main className="page-enter flex flex-1 flex-col">
-        <div className="mx-auto w-full max-w-6xl flex-1 px-2 sm:px-6">
-          <div className="h-[calc(100vh-12rem)] min-h-[480px]">
-            <Mindscape concepts={concepts} relations={relations} height={720} />
+        {state.concepts.length === 0 ? (
+          <div className="mx-auto flex h-[calc(100vh-9rem)] min-h-[520px] w-full max-w-6xl flex-col items-center justify-center gap-3 px-6">
+            <p className="meta">
+              <Link href="/learn" className="link">
+                Start something
+              </Link>{" "}
+              and the first marks appear here.
+            </p>
           </div>
-        </div>
-        <p className="meta mx-auto w-full max-w-6xl px-6 pb-10 sm:px-10">
-          Threads are what you have explained. Cords are what you have connected.
-          Contours are what has stayed. The glow is what you touched this fortnight.
-        </p>
+        ) : (
+          <MindscapeExplorer concepts={state.concepts} relations={state.relations} seed={getMindscapeSeed()} fields={fields} />
+        )}
       </main>
     </div>
   );

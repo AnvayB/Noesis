@@ -40,6 +40,13 @@ export const resources = sqliteTable("resources", {
   url: text("url"),
   title: text("title").notNull(),
   notes: text("notes"),
+  // Who made it, or which site/channel it lives on.
+  byline: text("byline"),
+  // For articles: the readable body, extracted at capture time so the
+  // session can present the text and the analysis can be grounded in it.
+  // Capped at ~30k characters. Null for videos and unreadable pages.
+  excerpt: text("excerpt"),
+  wordCount: integer("word_count"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(current_timestamp)`),
@@ -102,6 +109,10 @@ export const concepts = sqliteTable("concepts", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   description: text("description"),
+  // The broad field this concept belongs to ("Machine learning", "Music
+  // theory"). Position and hue on the Mindscape come from it. Assigned by
+  // the model when the concept is first named; editable.
+  field: text("field"),
   firstEncounteredAt: text("first_encountered_at")
     .notNull()
     .default(sql`(current_timestamp)`),
@@ -221,6 +232,14 @@ export const conceptUnderstandings = sqliteTable("concept_understandings", {
     .notNull()
     .default(sql`'[]'`),
   followUpQuestion: text("follow_up_question"),
+  // One sentence, in the learner's own terms, of what this explanation
+  // amounted to. Shown when returning, so a session is a thought, not a title.
+  gist: text("gist"),
+  // Where the explanation landed on a five-step ladder (1 heard of it, 5
+  // could teach it), and what would move it one step up. Shown once, in the
+  // feedback; never drawn on the map.
+  level: integer("level"),
+  nextStep: text("next_step"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(current_timestamp)`),
@@ -255,7 +274,11 @@ export const conceptRelationTypeValues = [
 ] as const;
 export type ConceptRelationType = (typeof conceptRelationTypeValues)[number];
 
-export const conceptRelationSourceValues = ["llm_inferred", "manual"] as const;
+// "explained": the learner drew the connection in their own words (this is
+// the only kind that fuses on the map). "llm_inferred": the model noticed
+// the material relates to something already known; steers growth only.
+// "manual": typed in by hand.
+export const conceptRelationSourceValues = ["explained", "llm_inferred", "manual"] as const;
 export type ConceptRelationSource =
   (typeof conceptRelationSourceValues)[number];
 

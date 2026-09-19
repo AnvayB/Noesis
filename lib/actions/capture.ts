@@ -2,7 +2,7 @@
 
 import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 import { ai } from "@/lib/ai";
 import { asUrl, fetchTitle, guessResourceType, hostOf } from "@/lib/capture";
 import { findOrCreateConcept } from "@/lib/concepts";
@@ -12,8 +12,12 @@ import {
   learningSessions,
   resources,
   sessionConcepts,
+  type ActivityMode,
+  type EnvironmentMode,
   type ResourceType,
 } from "@/lib/db/schema";
+import { fetchArticle } from "@/lib/extract";
+import { listKnownFields } from "@/lib/knowledge";
 import { listRecentConceptNames } from "@/lib/queries";
 
 function field(formData: FormData, name: string): string {
@@ -24,35 +28,93 @@ function safeReturnTo(value: string): string {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/";
 }
 
-// The concept a piece of learning lands on. Asked of the model with the
-// existing concept names so it reuses them; if the model is unavailable the
-// title itself becomes the concept, which is honest and editable later.
-async function suggestConcept(title: string): Promise<string> {
+export interface ConceptSuggestion {
+  topic: string;
+  field: string | null;
+}
+
+// The concept a piece of learning lands on, and the field it belongs to.
+// Asked of the model with the existing names so it reuses them; if the
+// model is unavailable the title itself becomes the concept, which is
+// honest and editable later.
+export async function suggestConcept(title: string): Promise<ConceptSuggestion> {
   try {
-    const existingTopics = await listRecentConceptNames(null, 50);
-    const { topic } = await ai.suggestTopic({ title, existingTopics });
-    if (topic?.trim()) return topic.trim();
+    const [existingTopics, existingFields] = await Promise.all([
+      listRecentConceptNames(null, 50),
+      listKnownFields(),
+    ]);
+    const { topic, field } = await ai.suggestTopic({ title, existingTopics, existingFields });
+    if (topic?.trim()) return { topic: topic.trim(), field: field?.trim() || null };
   } catch {
     // fall through
   }
-  return fallbackTopic(title);
+  return { topic: fallbackTopic(title), field: null };
 }
 
 // Without the model, a page title is the best concept name available. Page
 // titles carry site names and episode numbering after a separator; the
 // first segment is usually the subject.
 function fallbackTopic(title: string): string {
-  const first = title.split(/\s+[|\u2013\u2014\-:]\s+|\s+\|\s*/)[0]?.trim() || title.trim();
+  const first = title.split(/\s+[|–—\-:]\s+|\s+\|\s*/)[0]?.trim() || title.trim();
   const cleaned = first.replace(/^(watch|read|video)\s*[:\-]\s*/i, "").trim();
   return cleaned.length > 60 ? cleaned.slice(0, 57).trimEnd() + "…" : cleaned;
 }
 
-async function createSession(opts: {
+export interface ResourceInput {
+  type: ResourceType;
+  url: string | null;
+  title: string;
+  byline?: string | null;
+  excerpt?: string | null;
+  wordCount?: number | null;
+}
+
+/**
+ * Reads what a link points at: its title, and for an article, its text.
+ * Never throws; a link that cannot be read is still a fine resource.
+ */
+export async function describeLink(url: string): Promise<ResourceInput> {
+  const type = guessResourceType(url);
+  if (type === "youtube") {
+    const title = (await fetchTitle(url)) ?? hostOf(url);
+    let byline: string | null = null;
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (res.ok) byline = ((await res.json()) as { author_name?: string }).author_name ?? null;
+    } catch {
+      // no byline
+    }
+    return { type, url, title, byline };
+  }
+  const article = await fetchArticle(url);
+  if (article) {
+    return {
+      type,
+      url,
+      title: article.title ?? hostOf(url),
+      byline: article.byline ?? article.siteName ?? hostOf(url),
+      excerpt: article.text || null,
+      wordCount: article.wordCount || null,
+    };
+  }
+  const title = (await fetchTitle(url)) ?? hostOf(url);
+  return { type, url, title, byline: hostOf(url) };
+}
+
+export async function createSession(opts: {
   title: string;
   topic: string;
+  field: string | null;
   status: "pending" | "started";
-  resource: { type: ResourceType; url: string; title: string } | null;
+  resource: ResourceInput | null;
   curiosityItemId?: string | null;
+  environmentMode?: EnvironmentMode;
+  activityMode?: ActivityMode;
+  durationMinutes?: number | null;
+  notes?: string | null;
 }): Promise<string> {
   const db = await getDb();
 
@@ -66,11 +128,14 @@ async function createSession(opts: {
         type: opts.resource.type,
         url: opts.resource.url,
         title: opts.resource.title,
+        byline: opts.resource.byline ?? null,
+        excerpt: opts.resource.excerpt ?? null,
+        wordCount: opts.resource.wordCount ?? null,
       })
       .run();
   }
 
-  const concept = await findOrCreateConcept(opts.topic);
+  const concept = await findOrCreateConcept(opts.topic, opts.field);
   const sessionId = crypto.randomUUID();
   await db
     .insert(learningSessions)
@@ -78,10 +143,11 @@ async function createSession(opts: {
       id: sessionId,
       title: opts.title,
       resourceId,
-      // Not asked at capture time. Editable afterwards, defaulted honestly.
-      environmentMode: "focus",
-      activityMode: "consume",
+      environmentMode: opts.environmentMode ?? "focus",
+      activityMode: opts.activityMode ?? "consume",
       status: opts.status,
+      durationMinutes: opts.durationMinutes ?? null,
+      notes: opts.notes ?? null,
     })
     .run();
   await db
@@ -96,6 +162,8 @@ async function createSession(opts: {
       .where(eq(curiosityItems.id, opts.curiosityItemId))
       .run();
   }
+  revalidatePath("/");
+  revalidatePath("/learn");
   return sessionId;
 }
 
@@ -113,8 +181,8 @@ export async function captureAction(formData: FormData) {
 
   if (!url) {
     if (intent === "start") {
-      const topic = await suggestConcept(text);
-      const sessionId = await createSession({ title: text, topic, status: "started", resource: null });
+      const { topic, field: fieldName } = await suggestConcept(text);
+      const sessionId = await createSession({ title: text, topic, field: fieldName, status: "started", resource: null });
       redirect(`/sessions/${sessionId}`);
     }
     const db = await getDb();
@@ -124,19 +192,16 @@ export async function captureAction(formData: FormData) {
     redirect(returnTo);
   }
 
-  const type = guessResourceType(url);
-  const fetched = await fetchTitle(url);
-  const title = fetched ?? hostOf(url);
-  const topic = await suggestConcept(title);
+  const resource = await describeLink(url);
+  const { topic, field: fieldName } = await suggestConcept(resource.title);
   const sessionId = await createSession({
-    title,
+    title: resource.title,
     topic,
+    field: fieldName,
     status: intent === "start" ? "started" : "pending",
-    resource: { type, url, title },
+    resource,
   });
 
-  revalidatePath("/");
-  revalidatePath("/learn");
   if (intent === "start") redirect(`/sessions/${sessionId}`);
   redirect(returnTo);
 }
@@ -149,15 +214,14 @@ export async function startFromQuestionAction(formData: FormData) {
   const item = await db.select().from(curiosityItems).where(eq(curiosityItems.id, id)).get();
   if (!item) return;
 
-  const topic = await suggestConcept(item.text);
+  const { topic, field: fieldName } = await suggestConcept(item.text);
   const sessionId = await createSession({
     title: item.text,
     topic,
+    field: fieldName,
     status: "started",
     resource: null,
     curiosityItemId: item.id,
   });
-  revalidatePath("/");
-  revalidatePath("/learn");
   redirect(`/sessions/${sessionId}`);
 }

@@ -2,6 +2,7 @@ import { desc, eq, isNull } from "drizzle-orm";
 import { ai } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import {
+  conceptUnderstandings,
   concepts,
   explainBackConcepts,
   recallAttempts,
@@ -117,10 +118,20 @@ export async function getOrCreateDailyRecallPrompt(): Promise<PendingRecall | nu
   const daysSinceReviewed = Math.round(
     daysSince(concept.lastReviewedAt ?? concept.lastEncounteredAt),
   );
+  const lastGist = (
+    await db
+      .select({ gist: conceptUnderstandings.gist })
+      .from(explainBackConcepts)
+      .innerJoin(conceptUnderstandings, eq(conceptUnderstandings.explainBackId, explainBackConcepts.explainBackId))
+      .where(eq(explainBackConcepts.conceptId, concept.id))
+      .orderBy(desc(conceptUnderstandings.createdAt))
+      .get()
+  )?.gist;
 
   const generated = await ai.generateRecallQuestion({
     conceptName: concept.name,
-    lastUnderstandingSummary: null,
+    field: concept.field,
+    lastUnderstandingSummary: lastGist ?? null,
     daysSinceReviewed,
   });
 

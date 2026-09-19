@@ -12,6 +12,13 @@ const NAV_ITEMS = [
   { href: "/mindscape", label: "Mindscape" },
 ] as const;
 
+// Inside Learn, reachable from the phone menu too.
+const LEARN_ITEMS = [
+  { href: "/sessions/new", label: "Add with details" },
+  { href: "/sessions", label: "History" },
+  { href: "/tracks", label: "Tracks" },
+] as const;
+
 export type NavLabel = (typeof NAV_ITEMS)[number]["label"];
 
 export function NavHeader({
@@ -49,7 +56,7 @@ export function NavHeader({
         <div className="flex items-center gap-3 sm:gap-5">
           {right}
           <ThemeToggle />
-          <MobileNavMenu items={NAV_ITEMS} active={active} />
+          <MobileNavMenu items={NAV_ITEMS} secondary={LEARN_ITEMS} active={active} />
         </div>
       </div>
     </header>

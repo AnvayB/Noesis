@@ -2,108 +2,90 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 import { getDb } from "@/lib/db";
 import {
+  concepts,
   conceptUnderstandings,
   curiosityItems,
   explainBackConcepts,
+  explainBackRelations,
   explainBacks,
-  learningSessionStatusValues,
+  weeklyFocus,
   learningSessions,
   resourceTypeValues,
   resources,
   sessionConcepts,
   type ActivityMode,
   type EnvironmentMode,
+  type ResourceType,
 } from "@/lib/db/schema";
 import { findOrCreateConcept } from "@/lib/concepts";
+import { asUrl } from "@/lib/capture";
+import { createSession, describeLink, suggestConcept, type ResourceInput } from "@/lib/actions/capture";
 
 function field(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
 
+/**
+ * The detailed form: for logging a session with everything known about it,
+ * or for keeping one for later with notes. Only title matters; the concept
+ * is suggested when left blank, and a link is read for its text.
+ */
 export async function createSessionAction(formData: FormData) {
   const title = field(formData, "title");
-  const topic = field(formData, "topic");
-  const environmentMode = field(formData, "environmentMode") as EnvironmentMode;
-  const activityMode = field(formData, "activityMode") as ActivityMode;
+  const topicRaw = field(formData, "topic");
+  const environmentModeRaw = field(formData, "environmentMode");
+  const activityModeRaw = field(formData, "activityMode");
+  const environmentMode: EnvironmentMode = environmentModeRaw === "listen" ? "listen" : "focus";
+  const activityMode: ActivityMode = activityModeRaw === "practice" ? "practice" : "consume";
   const notes = field(formData, "notes") || null;
   const durationRaw = field(formData, "durationMinutes");
   const durationMinutes = durationRaw ? Number(durationRaw) : null;
-  const resourceType = field(formData, "resourceType");
-  const resourceUrl = field(formData, "resourceUrl");
+  const resourceTypeRaw = field(formData, "resourceType");
+  const resourceUrlRaw = field(formData, "resourceUrl");
   const resourceTitle = field(formData, "resourceTitle");
   const curiosityItemId = field(formData, "curiosityItemId") || null;
-  const statusRaw = field(formData, "status");
-  const status = learningSessionStatusValues.includes(
-    statusRaw as (typeof learningSessionStatusValues)[number],
-  )
-    ? (statusRaw as (typeof learningSessionStatusValues)[number])
-    : "started";
+  const status = field(formData, "status") === "pending" ? "pending" : "started";
 
-  if (!title || !topic) {
-    throw new Error("Title and topic are required.");
-  }
-  if (environmentMode !== "listen" && environmentMode !== "focus") {
-    throw new Error("Invalid environment mode.");
-  }
-  if (activityMode !== "consume" && activityMode !== "practice") {
-    throw new Error("Invalid activity mode.");
-  }
+  if (!title) throw new Error("A title is required.");
 
-  const db = await getDb();
-
-  let resourceId: string | null = null;
-  if (
-    resourceType &&
-    resourceTypeValues.includes(resourceType as (typeof resourceTypeValues)[number]) &&
-    (resourceUrl || resourceTitle)
-  ) {
-    resourceId = crypto.randomUUID();
-    await db
-      .insert(resources)
-      .values({
-        id: resourceId,
-        type: resourceType as (typeof resourceTypeValues)[number],
-        url: resourceUrl || null,
-        title: resourceTitle || resourceUrl,
-      })
-      .run();
+  const url = resourceUrlRaw ? asUrl(resourceUrlRaw) : null;
+  let resource: ResourceInput | null = null;
+  if (url) {
+    resource = await describeLink(url);
+    if (resourceTitle) resource.title = resourceTitle;
+    if (resourceTypeRaw && resourceTypeValues.includes(resourceTypeRaw as ResourceType)) {
+      resource.type = resourceTypeRaw as ResourceType;
+    }
+  } else if (resourceTitle) {
+    resource = {
+      type:
+        resourceTypeRaw && resourceTypeValues.includes(resourceTypeRaw as ResourceType)
+          ? (resourceTypeRaw as ResourceType)
+          : "other",
+      url: null,
+      title: resourceTitle,
+    };
   }
 
-  const concept = await findOrCreateConcept(topic);
+  const suggestion = topicRaw ? null : await suggestConcept(title);
+  const topic = topicRaw || suggestion?.topic || title;
+  const fieldName = field(formData, "field") || suggestion?.field || null;
 
-  const sessionId = crypto.randomUUID();
-  await db
-    .insert(learningSessions)
-    .values({
-      id: sessionId,
-      title,
-      resourceId,
-      environmentMode,
-      activityMode,
-      status,
-      durationMinutes,
-      notes,
-    })
-    .run();
-
-  await db
-    .insert(sessionConcepts)
-    .values({ sessionId, conceptId: concept.id, role: "primary" })
-    .run();
-
-  if (curiosityItemId) {
-    await db
-      .update(curiosityItems)
-      .set({
-        resolvedAt: sql`(current_timestamp)`,
-        promotedToSessionId: sessionId,
-      })
-      .where(eq(curiosityItems.id, curiosityItemId))
-      .run();
-  }
+  const sessionId = await createSession({
+    title,
+    topic,
+    field: fieldName,
+    status,
+    resource,
+    curiosityItemId,
+    environmentMode,
+    activityMode,
+    durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
+    notes,
+  });
 
   redirect(status === "pending" ? "/learn" : `/sessions/${sessionId}`);
 }
@@ -121,15 +103,10 @@ export async function updateSessionAction(formData: FormData) {
   const resourceUrl = field(formData, "resourceUrl");
   const resourceTitle = field(formData, "resourceTitle");
   const existingResourceId = field(formData, "resourceId") || null;
-  const statusRaw = field(formData, "status");
-  const status = learningSessionStatusValues.includes(
-    statusRaw as (typeof learningSessionStatusValues)[number],
-  )
-    ? (statusRaw as (typeof learningSessionStatusValues)[number])
-    : undefined;
+  const fieldName = field(formData, "field") || null;
 
-  if (!sessionId || !title || !topic || !status) {
-    throw new Error("Session id, title, topic, and status are required.");
+  if (!sessionId || !title || !topic) {
+    throw new Error("Session id, title, and concept are required.");
   }
   if (environmentMode !== "listen" && environmentMode !== "focus") {
     throw new Error("Invalid environment mode.");
@@ -141,11 +118,12 @@ export async function updateSessionAction(formData: FormData) {
   const db = await getDb();
 
   const existing = await db
-    .select({ endedAt: learningSessions.endedAt })
+    .select({ endedAt: learningSessions.endedAt, status: learningSessions.status })
     .from(learningSessions)
     .where(eq(learningSessions.id, sessionId))
     .get();
   if (!existing) throw new Error("Session not found.");
+  const status = existing.status;
 
   const existingConcept = await db
     .select({ conceptId: sessionConcepts.conceptId })
@@ -218,7 +196,10 @@ export async function updateSessionAction(formData: FormData) {
       .run();
   }
 
-  const concept = await findOrCreateConcept(topic);
+  const concept = await findOrCreateConcept(topic, fieldName);
+  if (fieldName) {
+    await db.update(concepts).set({ field: fieldName }).where(eq(concepts.id, concept.id)).run();
+  }
   if (concept.id !== existingConcept?.conceptId) {
     await db
       .delete(sessionConcepts)
@@ -245,25 +226,30 @@ export async function startSessionAction(formData: FormData) {
   const db = await getDb();
   await db
     .update(learningSessions)
-    .set({ status: "started" })
+    .set({ status: "started", startedAt: sql`(current_timestamp)` })
     .where(eq(learningSessions.id, sessionId))
     .run();
 
+  revalidatePath("/");
+  revalidatePath("/learn");
   redirect(`/sessions/${sessionId}`);
 }
 
-export async function completeSessionAction(formData: FormData) {
+/** Put a started session back among the things kept for later. Nothing is lost. */
+export async function setAsideSessionAction(formData: FormData) {
   const sessionId = field(formData, "sessionId");
   if (!sessionId) throw new Error("Session id is required.");
 
   const db = await getDb();
   await db
     .update(learningSessions)
-    .set({ status: "completed", endedAt: sql`(current_timestamp)` })
+    .set({ status: "pending" })
     .where(eq(learningSessions.id, sessionId))
     .run();
 
-  redirect(`/sessions/${sessionId}`);
+  revalidatePath("/");
+  revalidatePath("/learn");
+  revalidatePath("/sessions");
 }
 
 // FK "cascade"/"set null" in the schema are declarative only — libSQL, like
@@ -293,7 +279,12 @@ export async function deleteSessionAction(formData: FormData) {
       .delete(explainBackConcepts)
       .where(inArray(explainBackConcepts.explainBackId, explainBackIds))
       .run();
+    await db
+      .delete(explainBackRelations)
+      .where(inArray(explainBackRelations.explainBackId, explainBackIds))
+      .run();
   }
+  await db.delete(weeklyFocus).where(eq(weeklyFocus.sessionId, sessionId)).run();
 
   await db.delete(explainBacks).where(eq(explainBacks.sessionId, sessionId)).run();
   await db.delete(sessionConcepts).where(eq(sessionConcepts.sessionId, sessionId)).run();
