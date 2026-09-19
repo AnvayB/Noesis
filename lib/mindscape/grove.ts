@@ -86,6 +86,39 @@ export interface GroveRoot {
   hueB: number;
 }
 
+/** A small ambient sub-branch off a real branch — pure fullness, no id,
+ * not a concept, not clickable. Canopy density without graph complexity. */
+export interface GroveTwig {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  cx: number;
+  cy: number;
+  hue: number;
+  thickness: number;
+  leaves: GroveLeaf[];
+}
+
+/** A tiny unlabeled plant along the ground line, filling the width between
+ * the real trees. Never a field, never clickable. */
+export interface GroveSapling {
+  x: number;
+  baseY: number;
+  topY: number;
+  hue: number;
+  leaves: { x: number; y: number; r: number }[];
+}
+
+/** A drifting seed or mote of pollen, purely atmospheric. */
+export interface GrovePollen {
+  x: number;
+  y: number;
+  r: number;
+  hue: number;
+  a: number;
+}
+
 export interface GroveTrunk {
   x: number;
   baseY: number;
@@ -94,6 +127,14 @@ export interface GroveTrunk {
   name: string;
   sapling: boolean;
   width: number;
+}
+
+/** A faint, distant silhouette on the horizon — pure atmosphere, always
+ * present so the sky above the grove is never simply blank. */
+export interface GroveHorizonTree {
+  x: number;
+  h: number;
+  w: number;
 }
 
 export interface GroveModel {
@@ -106,8 +147,12 @@ export interface GroveModel {
   fields: PlacedField[];
   trunks: GroveTrunk[];
   branches: GroveBranch[];
+  twigs: GroveTwig[];
   tendrils: GroveTendril[];
   roots: GroveRoot[];
+  saplings: GroveSapling[];
+  pollen: GrovePollen[];
+  horizon: GroveHorizonTree[];
   points: MapPoint[];
   bounds: { x0: number; y0: number; x1: number; y1: number };
 }
@@ -134,13 +179,16 @@ export function buildGrove(input: MapInput): GroveModel {
   });
 
   const N = Math.max(1, fieldOrder.length);
-  const SLOT = 340;
-  const worldW = Math.max(1400, SLOT * N + 240);
+  const SLOT = 380;
+  // Generous even with one or two fields: a grove fills a hero width, not
+  // just the trees it strictly needs.
+  const worldW = Math.max(1900, SLOT * N + 420);
   const worldH = 760;
   const groundY = worldH * 0.72;
 
   const trunks: GroveTrunk[] = [];
   const branches: GroveBranch[] = [];
+  const twigs: GroveTwig[] = [];
   const tendrils: GroveTendril[] = [];
 
   const trunkX = new Map<number, number>();
@@ -187,16 +235,17 @@ export function buildGrove(input: MapInput): GroveModel {
       const lastCorrect = [...w.input.explanations].reverse().find((e) => e.status === "correct");
       const weak = w.input.misconceptions > 0 && (!lastCorrect || parseWhen(lastCorrect.at) < now - 21 * DAY);
 
-      // Foliage along every explained branch, denser with depth and revisits.
+      // Foliage along every explained branch, denser with depth and revisits
+      // — a full, layered canopy rather than a scatter of dots.
       const leaves: GroveLeaf[] = [];
       if (explained && !weak) {
-        const n = Math.round(3 + extent * 7 + Math.min(4, w.input.explanations.length - 1));
+        const n = Math.round(6 + extent * 14 + Math.min(6, w.input.explanations.length - 1) * 2);
         for (let k = 0; k < n; k++) {
-          const t = 0.3 + (k / Math.max(1, n - 1)) * 0.68;
+          const t = 0.22 + (k / Math.max(1, n - 1)) * 0.8;
           const along = { x: x0 + dx * t + Math.sin(t * 3) * bend * 0.4, y: y0 + dy * t };
           const a = rand(w.rng, 0, Math.PI * 2) + k * GOLDEN;
-          const r = 8 + w.rng() * 9;
-          leaves.push({ x: along.x + Math.cos(a) * r, y: along.y + Math.sin(a) * r * 0.7, r: 3.6 + w.rng() * 2.6, flower: false });
+          const r = 7 + w.rng() * 11;
+          leaves.push({ x: along.x + Math.cos(a) * r, y: along.y + Math.sin(a) * r * 0.7, r: 3.4 + w.rng() * 3, flower: false });
         }
       }
 
@@ -207,6 +256,35 @@ export function buildGrove(input: MapInput): GroveModel {
         settle: w.input.retainedAt ? Math.min(1, Math.max(0, (now - parseWhen(w.input.retainedAt)) / (28 * DAY))) : 0,
         leaves,
       });
+
+      // Ambient twigs: two or three smaller sub-branches off the real one,
+      // each with its own little cluster of leaves or buds — canopy
+      // fullness that doesn't add a single new node to the knowledge model.
+      if (explained && !weak) {
+        const nTwigs = 2 + Math.floor(w.rng() * 2);
+        for (let ti = 0; ti < nTwigs; ti++) {
+          const t = 0.45 + w.rng() * 0.45;
+          const tx0 = x0 + dx * t, ty0 = y0 + dy * t;
+          const tSide = w.rng() < 0.5 ? -1 : 1;
+          const tAngle = angle + tSide * (0.5 + w.rng() * 0.5);
+          const tLen = length * (0.28 + w.rng() * 0.22);
+          const tdx = Math.sin(tAngle) * tLen, tdy = -Math.cos(tAngle) * tLen * 0.8;
+          const tx1 = tx0 + tdx, ty1 = ty0 + tdy;
+          const tcx = tx0 + tdx * 0.5, tcy = ty0 + tdy * 0.5;
+          const twigLeaves: GroveLeaf[] = [];
+          const nl = 2 + Math.floor(w.rng() * 4);
+          for (let k = 0; k < nl; k++) {
+            const lt = 0.3 + (k / Math.max(1, nl - 1)) * 0.75;
+            const a2 = rand(w.rng, 0, Math.PI * 2);
+            const r2 = 4 + w.rng() * 4;
+            twigLeaves.push({
+              x: tx0 + tdx * lt + Math.cos(a2) * r2, y: ty0 + tdy * lt + Math.sin(a2) * r2 * 0.7,
+              r: 2.2 + w.rng() * 1.8, flower: false,
+            });
+          }
+          twigs.push({ x0: tx0, y0: ty0, x1: tx1, y1: ty1, cx: tcx, cy: tcy, hue: w.hue, thickness: Math.max(0.6, thickness * 0.4), leaves: twigLeaves });
+        }
+      }
     });
   }
 
@@ -239,6 +317,8 @@ export function buildGrove(input: MapInput): GroveModel {
 
   // One root system under the whole grove; a bridged pair of domains sends
   // a root sideways to meet, the underground echo of the aerial tendril.
+  // Every real tree also sends a few of its own roots down and out, so the
+  // ground reads as inhabited, not just the canopy.
   const rootsNoise = makeNoise(hash32("roots:" + input.seed));
   const roots: GroveRoot[] = [];
   for (const key of bridgedFields) {
@@ -249,6 +329,60 @@ export function buildGrove(input: MapInput): GroveModel {
       ax: xa, ay: groundY + 8, bx: xb, by: groundY + 8,
       cx: (xa + xb) / 2, cy: groundY + 8 + dip,
       hueA: fields[fa].hue, hueB: fields[fb].hue,
+    });
+  }
+  const rootRng = mulberry32(hash32("rootbranch:" + input.seed));
+  for (const t of trunks) {
+    if (t.sapling) continue;
+    const nRoots = 2 + Math.floor(rootRng() * 2);
+    for (let i = 0; i < nRoots; i++) {
+      const side = i % 2 === 0 ? 1 : -1;
+      const len = (30 + t.width * 8) * (0.6 + rootRng() * 0.7);
+      const ax = t.x, ay = t.baseY + 4;
+      const bx = t.x + side * len, by = t.baseY + 10 + rootRng() * 14;
+      roots.push({
+        ax, ay, bx, by, cx: (ax + bx) / 2, cy: ay + (by - ay) * 0.4,
+        hueA: t.hue, hueB: t.hue,
+      });
+    }
+  }
+
+  // Ambient saplings: small unlabeled plants filling the ground line
+  // between and around the real trees, so the whole width feels grown-in.
+  const sapRng = mulberry32(hash32("saplings:" + input.seed));
+  const saplings: GroveSapling[] = [];
+  const trunkXs = [...trunkX.values()];
+  const nSaplings = Math.round(worldW / 70);
+  for (let i = 0; i < nSaplings; i++) {
+    const x = 40 + sapRng() * (worldW - 80);
+    const tooClose = trunkXs.some((tx) => Math.abs(tx - x) < 46);
+    if (tooClose) continue;
+    const h = 10 + sapRng() * sapRng() * 32;
+    const baseY = groundY + sapRng() * 4;
+    const topY = baseY - h;
+    const hue = Math.floor(sapRng() * 6);
+    const leaves: { x: number; y: number; r: number }[] = [];
+    const nl = 1 + Math.floor(sapRng() * 3);
+    for (let k = 0; k < nl; k++) {
+      const t = 0.5 + (k / Math.max(1, nl)) * 0.5;
+      const side = k % 2 === 0 ? 1 : -1;
+      leaves.push({ x: x + side * (3 + sapRng() * 5), y: baseY - h * t, r: 2 + sapRng() * 2.2 });
+    }
+    saplings.push({ x, baseY, topY, hue, leaves });
+  }
+
+  // Pollen: a drift of small motes, some near the canopies, some loose in
+  // the open air above the ground line.
+  const polRng = mulberry32(hash32("pollen:" + input.seed));
+  const pollen: GrovePollen[] = [];
+  const nPollen = Math.round((worldW * worldH) / 26000);
+  for (let i = 0; i < nPollen; i++) {
+    pollen.push({
+      x: polRng() * worldW,
+      y: groundY - polRng() * polRng() * (groundY - 20),
+      r: 1 + polRng() * 2.4,
+      hue: Math.floor(polRng() * 6),
+      a: 0.08 + polRng() * 0.16,
     });
   }
 
@@ -269,9 +403,22 @@ export function buildGrove(input: MapInput): GroveModel {
   }
   void rootsNoise;
 
+  // Horizon: a faint, distant tree line spanning the whole width, always
+  // present so the grove has atmosphere even before the first real tree.
+  const horRng = mulberry32(hash32("horizon:" + input.seed));
+  const horizon: GroveHorizonTree[] = [];
+  const nHorizon = Math.round(worldW / 55);
+  for (let i = 0; i < nHorizon; i++) {
+    horizon.push({
+      x: (worldW / nHorizon) * (i + horRng() * 0.6),
+      h: 26 + horRng() * horRng() * 60,
+      w: 5 + horRng() * 6,
+    });
+  }
+
   return {
     width: worldW, height: worldH, groundY, grid: G, cell: CELL, relief,
-    fields, trunks, branches, tendrils, roots,
+    fields, trunks, branches, twigs, tendrils, roots, saplings, pollen, horizon,
     points: branches.map((b) => ({ id: b.id, name: b.name, slug: b.slug, x: b.x1, y: b.y1 })),
     bounds: { x0, y0, x1, y1 },
   };

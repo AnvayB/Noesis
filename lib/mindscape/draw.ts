@@ -76,8 +76,9 @@ export const DEFAULT_PALETTE: { day: Palette; night: Palette } = {
 
 export function fitView(model: Viewable, w: number, h: number, ids?: Set<string>): View {
   let { x0, y0, x1, y1 } = model.bounds;
-  if (ids && ids.size > 0) {
-    const pts = model.points.filter((c) => ids.has(c.id));
+  const focused = !!ids && ids.size > 0;
+  if (focused) {
+    const pts = model.points.filter((c) => ids!.has(c.id));
     if (pts.length > 0) {
       x0 = Math.min(...pts.map((p) => p.x)) - 180;
       y0 = Math.min(...pts.map((p) => p.y)) - 140;
@@ -87,7 +88,15 @@ export function fitView(model: Viewable, w: number, h: number, ids?: Set<string>
   }
   const pad = 36;
   const bw = Math.max(240, x1 - x0), bh = Math.max(200, y1 - y0);
-  const scale = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh, 2.2);
+  let scale = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh, 2.2);
+  // Only for the whole-map view (never when fitting to a highlighted
+  // concept): don't zoom in tighter than showing most of the world's own
+  // width, so a sparse map still reads as a whole environment — ambient
+  // atmosphere and all — rather than a crop of one corner.
+  if (!focused) {
+    const minScale = (w - pad * 2) / (model.width * 0.68);
+    if (Number.isFinite(minScale)) scale = Math.max(scale, Math.min(minScale, 2.2));
+  }
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   return clampView(model, { scale, tx: w / 2 - cx * scale, ty: h / 2 - cy * scale }, w, h);
 }
@@ -138,7 +147,7 @@ export function drawGenericGlow(
 
 // ─── Ground: a stylized microscopic ecosystem ──────────────────────────────
 
-function drawDustShape(ctx: Ctx2D, kind: string, x: number, y: number, r: number, rotation: number, color: RGB, a: number) {
+function drawDustShape(ctx: Ctx2D, kind: string, x: number, y: number, r: number, rotation: number, color: RGB, a: number, detail: boolean) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rotation);
@@ -151,6 +160,30 @@ function drawDustShape(ctx: Ctx2D, kind: string, x: number, y: number, r: number
     ctx.beginPath();
     ctx.ellipse(0, 0, r * 1.6, r * 0.55, 0, 0, Math.PI * 2);
     ctx.stroke();
+  } else if (kind === "capsule") {
+    // A friendly bacillus: a rounded rod with a faint fill and a membrane line.
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.9, r * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+  } else if (kind === "cluster") {
+    // A small colony of three to four tiny cells huddled together.
+    const n = 3 + (rotation > Math.PI ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const a2 = (i / n) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a2) * r * 0.5, Math.sin(a2) * r * 0.5, r * 0.42, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+  } else if (kind === "diatom") {
+    // A ringed, radially-ribbed micro-organism.
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const a2 = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a2) * r * 0.3, Math.sin(a2) * r * 0.3);
+      ctx.lineTo(Math.cos(a2) * r, Math.sin(a2) * r);
+      ctx.stroke();
+    }
   } else if (kind === "ring") {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
   } else if (kind === "triangle") {
@@ -170,6 +203,11 @@ function drawDustShape(ctx: Ctx2D, kind: string, x: number, y: number, r: number
       ctx.stroke();
     }
   }
+  // A near-tier specimen carries a nucleus, so it reads as alive up close.
+  if (detail && (kind === "capsule" || kind === "diatom" || kind === "ring")) {
+    ctx.fillStyle = rgba(color, a * 1.3);
+    ctx.beginPath(); ctx.arc(r * 0.15, -r * 0.1, Math.max(0.6, r * 0.16), 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -181,8 +219,28 @@ export function drawGround(ctx: Ctx2D, model: GroundModel, pal: Palette, view: V
   ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
 
+  // Ambient membranes: the furthest layer, soft unlabeled bubbles that give
+  // the dish depth before anything semantic is drawn.
+  for (const m of model.membranes) {
+    const hue = pal.hues[m.hue];
+    const grad = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
+    grad.addColorStop(0, rgba(hue, m.a));
+    grad.addColorStop(1, rgba(hue, 0));
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Ambient trails, under the specimens they connect.
+  for (const t of model.trails) {
+    ctx.strokeStyle = rgba(pal.hues[t.hue], t.a);
+    ctx.lineWidth = 0.6 / view.scale;
+    ctx.setLineDash([1.6, 3]);
+    ctx.beginPath(); ctx.moveTo(t.ax, t.ay); ctx.lineTo(t.bx, t.by); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   for (const d of model.dust) {
-    drawDustShape(ctx, d.kind, d.x, d.y, d.r, d.rotation, pal.hues[d.hue], d.a);
+    drawDustShape(ctx, d.kind, d.x, d.y, d.r, d.rotation, pal.hues[d.hue], d.a, d.detail);
   }
 
   ctx.font = `italic ${13 / view.scale}px Fraunces, Georgia, serif`;
@@ -312,9 +370,29 @@ export function drawGrove(
 ) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = rgba(pal.paper, 1);
+  // A soft sky wash, always present, so the grove has atmosphere above the
+  // ground line even before a single tree has grown.
+  const skyTop: RGB = mix(pal.paper, pal.night ? [30, 34, 26] : [255, 252, 238], pal.night ? 0.35 : 0.5);
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+  skyGrad.addColorStop(0, rgba(skyTop, 1));
+  skyGrad.addColorStop(1, rgba(pal.paper, 1));
+  ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, w, h);
   ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
+
+  // Horizon: a faint distant tree line, always present, well behind
+  // everything real.
+  const horizonHue = mix(pal.ink, pal.paper, 0.48);
+  for (const t of model.horizon) {
+    ctx.fillStyle = rgba(horizonHue, 0.2);
+    ctx.beginPath();
+    ctx.moveTo(t.x - t.w, model.groundY + 2);
+    ctx.lineTo(t.x, model.groundY - t.h);
+    ctx.lineTo(t.x + t.w, model.groundY + 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
   if (washImg) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
@@ -345,15 +423,28 @@ export function drawGrove(
       ctx.stroke();
     }
   }
-  // Roots between bridged domains — the underground echo of a synthesis.
+  // Roots: bridged domains, and every tree's own roots into the ground.
   for (const r of model.roots) {
     const col = mix(pal.hues[r.hueA], pal.hues[r.hueB], 0.5);
-    ctx.strokeStyle = rgba(col, 0.4);
-    ctx.lineWidth = 1 / view.scale;
+    ctx.strokeStyle = rgba(col, r.hueA === r.hueB ? 0.3 : 0.4);
+    ctx.lineWidth = (r.hueA === r.hueB ? 0.8 : 1) / view.scale;
     ctx.beginPath();
     ctx.moveTo(r.ax, r.ay);
     ctx.quadraticCurveTo(r.cx, r.cy, r.bx, r.by);
     ctx.stroke();
+  }
+
+  // Ambient saplings: small unlabeled plants filling the ground between
+  // and around the real trees.
+  for (const s of model.saplings) {
+    const hue = pal.hues[s.hue];
+    ctx.strokeStyle = rgba(mix(hue, pal.paper, 0.25), 0.55);
+    ctx.lineWidth = 1 / view.scale;
+    ctx.beginPath(); ctx.moveTo(s.x, s.baseY); ctx.lineTo(s.x, s.topY); ctx.stroke();
+    for (const l of s.leaves) {
+      ctx.fillStyle = rgba(hue, 0.45);
+      ctx.beginPath(); ctx.ellipse(l.x, l.y, l.r, l.r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   // Trunks.
@@ -403,6 +494,22 @@ export function drawGrove(
     }
   }
 
+  // Ambient twigs: smaller sub-branches off the real ones, with their own
+  // little leaf clusters — canopy fullness, no new nodes.
+  for (const tw of model.twigs) {
+    const hue = pal.hues[tw.hue];
+    ctx.strokeStyle = rgba(hue, 0.5);
+    ctx.lineWidth = Math.max(tw.thickness, 0.5) / Math.max(view.scale, 0.6);
+    ctx.beginPath();
+    ctx.moveTo(tw.x0, tw.y0);
+    ctx.quadraticCurveTo(tw.cx, tw.cy, tw.x1, tw.y1);
+    ctx.stroke();
+    for (const l of tw.leaves) {
+      ctx.fillStyle = rgba(hue, 0.4);
+      ctx.beginPath(); ctx.ellipse(l.x, l.y, l.r, l.r * 0.65, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
   for (const t of model.tendrils) {
     const col = t.cross ? mix(pal.hues[t.hueA], pal.hues[t.hueB], 0.5) : pal.hues[t.hueA];
     ctx.strokeStyle = rgba(col, 0.7);
@@ -411,6 +518,13 @@ export function drawGrove(
     ctx.moveTo(t.ax, t.ay);
     ctx.quadraticCurveTo(t.cx, t.cy, t.bx, t.by);
     ctx.stroke();
+  }
+
+  // Pollen: a drift of motes, the last thing painted, so it reads as
+  // floating in the air above everything else.
+  for (const p of model.pollen) {
+    ctx.fillStyle = rgba(mix(pal.hues[p.hue], [255, 255, 255], 0.4), p.a);
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
   }
 }
 
@@ -482,7 +596,25 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
     ctx.beginPath(); ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2); ctx.fill();
   }
 
+  // Orbital arcs, decorative motion, under the star field — visible enough
+  // to read as intentional curves in the sky, not a rendering artifact.
+  for (const arc of model.arcs) {
+    ctx.strokeStyle = rgba(mix(SKY_HUES[arc.hue], [255, 255, 255], 0.3), arc.a);
+    ctx.lineWidth = 1 / view.scale;
+    ctx.beginPath();
+    ctx.arc(arc.cx, arc.cy, arc.r, arc.a0, arc.a1);
+    ctx.stroke();
+  }
+
   for (const d of model.dust) {
+    if (d.twinkle) {
+      const hr = d.r * 5;
+      const grad3 = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, hr);
+      grad3.addColorStop(0, rgba([240, 240, 250], d.a * 0.5));
+      grad3.addColorStop(1, rgba([240, 240, 250], 0));
+      ctx.fillStyle = grad3;
+      ctx.beginPath(); ctx.arc(d.x, d.y, hr, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.fillStyle = rgba([236, 238, 246], d.a);
     ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
   }

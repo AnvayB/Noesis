@@ -60,11 +60,25 @@ export interface SkyBridge {
   hueB: number;
 }
 
-/** Faraway, unclickable dust — the rest of the sky, not any concept. */
+/** Faraway, unclickable dust — the rest of the sky, not any concept. Three
+ * depth tiers: a haze of the smallest, dimmest points behind, fewer,
+ * bigger, brighter ones in front, so the field itself has depth. */
 export interface SkyDust {
   x: number;
   y: number;
   r: number;
+  a: number;
+  twinkle: boolean;
+}
+
+/** A faint decorative orbital curve, pure atmosphere — not a relationship. */
+export interface SkyArc {
+  cx: number;
+  cy: number;
+  r: number;
+  a0: number;
+  a1: number;
+  hue: number;
   a: number;
 }
 
@@ -94,6 +108,7 @@ export interface SkyModel {
   lines: SkyLine[];
   bridges: SkyBridge[];
   dust: SkyDust[];
+  arcs: SkyArc[];
   galaxies: SkyGalaxy[];
   haze: SkyHaze[];
   points: MapPoint[];
@@ -152,36 +167,59 @@ export function buildSky(input: MapInput): SkyModel {
   }
   if (!Number.isFinite(x0)) { x0 = W * 0.3; y0 = H * 0.3; x1 = W * 0.7; y1 = H * 0.7; }
 
-  // Dust: the rest of the sky, so the world reads as a sky everywhere, not
-  // a lit cluster on a blank field. Uniform across the whole world, seeded,
-  // stable, never clickable, never labeled.
+  // Dust: the rest of the sky, in three depth tiers, so the field itself
+  // has layers — a haze of tiny points behind, fewer brighter ones in
+  // front, and a scatter of twinkling ones among them.
   const rng = mulberry32(hash32("dust:" + input.seed));
   const dust: SkyDust[] = [];
-  const count = Math.round((W * H) / 9000);
-  for (let i = 0; i < count; i++) {
-    dust.push({ x: rng() * W, y: rng() * H, r: 0.4 + rng() * 0.9, a: 0.12 + rng() * 0.28 });
-  }
+  const pushStars = (n: number, rMin: number, rMax: number, aMin: number, aMax: number, twinklePct: number) => {
+    for (let i = 0; i < n; i++) {
+      dust.push({
+        x: rng() * W, y: rng() * H,
+        r: rMin + rng() * (rMax - rMin),
+        a: aMin + rng() * (aMax - aMin),
+        twinkle: rng() < twinklePct,
+      });
+    }
+  };
+  pushStars(Math.round((W * H) / 3200), 0.3, 0.7, 0.14, 0.32, 0.04);
+  pushStars(Math.round((W * H) / 8500), 0.6, 1.3, 0.22, 0.45, 0.1);
+  pushStars(Math.round((W * H) / 22000), 1.1, 2.1, 0.4, 0.7, 0.25);
 
-  // Two distant galaxies, pure atmosphere, placed away from the content so
-  // they never compete with it.
+  // Three to four distant galaxies, pure atmosphere, placed away from the
+  // content so they never compete with it.
   const grng = mulberry32(hash32("galaxy:" + input.seed));
   const galaxies: SkyGalaxy[] = [
-    { x: W * 0.08 + grng() * W * 0.06, y: H * 0.22 + grng() * H * 0.15, r: 70 + grng() * 30, rotation: grng() * Math.PI, a: 0.5 },
-    { x: W * 0.9 - grng() * W * 0.06, y: H * 0.3 + grng() * H * 0.2, r: 60 + grng() * 25, rotation: grng() * Math.PI, a: 0.42 },
+    { x: W * 0.07 + grng() * W * 0.05, y: H * 0.18 + grng() * H * 0.14, r: 75 + grng() * 30, rotation: grng() * Math.PI, a: 0.55 },
+    { x: W * 0.92 - grng() * W * 0.05, y: H * 0.28 + grng() * H * 0.18, r: 65 + grng() * 28, rotation: grng() * Math.PI, a: 0.48 },
+    { x: W * 0.35 + grng() * W * 0.1, y: H * 0.08 + grng() * H * 0.06, r: 30 + grng() * 14, rotation: grng() * Math.PI, a: 0.32 },
   ];
 
-  // Soft haze behind the fields with real content, and a couple of loose
-  // ones elsewhere for atmosphere.
+  // Faint orbital arcs — decorative curves suggesting motion, never a
+  // relationship, scattered across the world.
+  const arng = mulberry32(hash32("arcs:" + input.seed));
+  const arcs: SkyArc[] = [];
+  const nArcs = Math.max(7, Math.round((W * H) / 190000));
+  for (let i = 0; i < nArcs; i++) {
+    const cx = arng() * W, cy = arng() * H * 0.85;
+    const r = 70 + arng() * 260;
+    const a0 = arng() * Math.PI * 2;
+    arcs.push({ cx, cy, r, a0, a1: a0 + 0.6 + arng() * 1.5, hue: Math.floor(arng() * 6), a: 0.08 + arng() * 0.1 });
+  }
+
+  // Rich haze behind the fields with real content, and several loose
+  // nebula washes elsewhere for atmosphere and color.
   const hrng = mulberry32(hash32("haze:" + input.seed));
   const haze: SkyHaze[] = fields
     .filter((f) => f.count > 0)
-    .map((f) => ({ x: f.x, y: f.y, r: f.reach * 2.2, hue: f.hue, a: 0.05 + hrng() * 0.04 }));
-  for (let i = 0; i < 2; i++) {
-    haze.push({ x: hrng() * W, y: hrng() * H * 0.7, r: 90 + hrng() * 60, hue: Math.floor(hrng() * 6), a: 0.03 + hrng() * 0.03 });
+    .map((f) => ({ x: f.x, y: f.y, r: f.reach * 2.6, hue: f.hue, a: 0.07 + hrng() * 0.05 }));
+  const nLooseHaze = Math.max(5, Math.round((W * H) / 260000));
+  for (let i = 0; i < nLooseHaze; i++) {
+    haze.push({ x: hrng() * W, y: hrng() * H * 0.75, r: 100 + hrng() * 90, hue: Math.floor(hrng() * 6), a: 0.035 + hrng() * 0.04 });
   }
 
   return {
-    width: W, height: H, fields, stars, lines, bridges, dust, galaxies, haze,
+    width: W, height: H, fields, stars, lines, bridges, dust, arcs, galaxies, haze,
     points: stars.map((s) => ({ id: s.id, name: s.name, slug: s.slug, x: s.x, y: s.y })),
     bounds: { x0, y0, x1, y1 },
   };

@@ -72,15 +72,40 @@ export interface GroundFilament {
   dotted: boolean;
 }
 
-/** Purely decorative — the rest of the dish. Not tied to any concept. */
+/** Purely decorative — the rest of the dish, never a concept. Three tiers
+ * (far/mid/near) give the ecosystem depth: many tiny faint specks behind,
+ * fewer, larger, more detailed organisms in front. */
 export interface GroundDust {
   x: number;
   y: number;
-  kind: "dot" | "rod" | "ring" | "burst" | "triangle";
+  kind: "dot" | "rod" | "ring" | "burst" | "triangle" | "capsule" | "cluster" | "diatom";
   r: number;
   a: number;
   hue: number;
   rotation: number;
+  /** Near-tier specimens carry a nucleus dot or two, like a tiny cell. */
+  detail: boolean;
+}
+
+/** A soft, unlabeled translucent bubble — ambient depth behind and between
+ * the real colonies, never a field. */
+export interface GroundMembrane {
+  x: number;
+  y: number;
+  r: number;
+  hue: number;
+  a: number;
+}
+
+/** A faint dotted thread between two nearby specimens — texture suggesting
+ * a living dish, not a real relationship. */
+export interface GroundTrail {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  hue: number;
+  a: number;
 }
 
 export interface GroundModel {
@@ -90,7 +115,9 @@ export interface GroundModel {
   colonies: GroundColony[];
   cells: GroundCell[];
   filaments: GroundFilament[];
+  membranes: GroundMembrane[];
   dust: GroundDust[];
+  trails: GroundTrail[];
   points: MapPoint[];
   bounds: { x0: number; y0: number; x1: number; y1: number };
 }
@@ -155,22 +182,62 @@ export function buildGroundEcosystem(input: MapInput): GroundModel {
     return { name: f.name, x: f.x, y: f.y, hue: f.hue, radius, labelX: f.labelX, labelY: f.labelY };
   });
 
-  // Dust: the rest of the dish. Small rods, rings, dots, bursts, triangles,
-  // scattered across the whole world, never clickable, never labeled.
+  // Ambient membranes: soft unlabeled bubbles behind and between the real
+  // colonies, so the dish reads as layered rather than flat.
+  const mrng = mulberry32(hash32("membranes:" + input.seed));
+  const membranes: GroundMembrane[] = [];
+  const membraneCount = Math.round((W * H) / 70000);
+  for (let i = 0; i < membraneCount; i++) {
+    membranes.push({
+      x: mrng() * W, y: mrng() * H,
+      r: 34 + mrng() * mrng() * 170,
+      hue: Math.floor(mrng() * 6),
+      a: 0.035 + mrng() * 0.06,
+    });
+  }
+
+  // Dust: the rest of the dish, in three depth tiers. Far is a haze of
+  // tiny specks; mid fills the middle distance; near is a scatter of small
+  // but genuine-looking organisms — capsules, clusters, diatoms — with a
+  // nucleus dot or two, so the ecosystem feels inhabited at every scale.
   const rng = mulberry32(hash32("dust:" + input.seed));
   const dust: GroundDust[] = [];
-  const kinds: GroundDust["kind"][] = ["dot", "rod", "ring", "burst", "triangle"];
-  // Restrained: a stray specimen here and there, not a field of confetti.
-  const count = Math.round((W * H) / 16000);
-  for (let i = 0; i < count; i++) {
-    dust.push({
-      x: rng() * W, y: rng() * H,
-      kind: kinds[Math.floor(rng() * kinds.length)],
-      r: 1.5 + rng() * 4.5,
-      a: 0.06 + rng() * 0.12,
-      hue: Math.floor(rng() * 6),
-      rotation: rng() * Math.PI * 2,
-    });
+  const farKinds: GroundDust["kind"][] = ["dot"];
+  const midKinds: GroundDust["kind"][] = ["dot", "rod", "ring", "triangle"];
+  const nearKinds: GroundDust["kind"][] = ["capsule", "cluster", "diatom", "rod", "burst", "ring"];
+  const pushDust = (n: number, kinds: GroundDust["kind"][], rMin: number, rMax: number, aMin: number, aMax: number, detail: boolean) => {
+    for (let i = 0; i < n; i++) {
+      dust.push({
+        x: rng() * W, y: rng() * H,
+        kind: kinds[Math.floor(rng() * kinds.length)],
+        r: rMin + rng() * (rMax - rMin),
+        a: aMin + rng() * (aMax - aMin),
+        hue: Math.floor(rng() * 6),
+        rotation: rng() * Math.PI * 2,
+        detail,
+      });
+    }
+  };
+  pushDust(Math.round((W * H) / 5200), farKinds, 0.6, 1.8, 0.05, 0.12, false);
+  pushDust(Math.round((W * H) / 11000), midKinds, 1.6, 4.2, 0.08, 0.18, false);
+  pushDust(Math.round((W * H) / 26000), nearKinds, 3.5, 8, 0.14, 0.28, true);
+
+  // Trails: a faint dotted thread between some nearby near-tier specimens —
+  // an ecosystem's texture, not a stated relationship.
+  const trng = mulberry32(hash32("trails:" + input.seed));
+  const trails: GroundTrail[] = [];
+  const nearSpecimens = dust.filter((d) => d.detail);
+  for (let i = 0; i < nearSpecimens.length; i++) {
+    if (trng() > 0.4) continue;
+    const a = nearSpecimens[i];
+    let best: GroundDust | null = null, bd = 90;
+    for (let j = 0; j < nearSpecimens.length; j++) {
+      if (i === j) continue;
+      const b = nearSpecimens[j];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < bd) { bd = d; best = b; }
+    }
+    if (best) trails.push({ ax: a.x, ay: a.y, bx: best.x, by: best.y, hue: a.hue, a: 0.06 + trng() * 0.08 });
   }
 
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -181,7 +248,7 @@ export function buildGroundEcosystem(input: MapInput): GroundModel {
   if (!Number.isFinite(x0)) { x0 = W * 0.3; y0 = H * 0.3; x1 = W * 0.7; y1 = H * 0.7; }
 
   return {
-    width: W, height: H, fields, colonies, cells, filaments, dust,
+    width: W, height: H, fields, colonies, cells, filaments, membranes, dust, trails,
     points: cells.map((c) => ({ id: c.id, name: c.name, slug: c.slug, x: c.x, y: c.y })),
     bounds: { x0, y0, x1, y1 },
   };
