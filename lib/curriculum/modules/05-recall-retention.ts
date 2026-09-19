@@ -40,7 +40,7 @@ export const recallRetention: CurriculumModule = {
       prompt:
         "Trace what happens, from loading the home page to a new recall question appearing (on a day when one hasn't been generated yet).",
       groundTruth:
-        "app/page.tsx (home dashboard) calls getOrCreateDailyRecallPrompt() from lib/recall.ts. It queries recallAttempts for an unanswered row (none found) and for the most recent row overall (not from today), so it proceeds: pickHeuristicConcept() queries all concepts plus explainBackConcepts statuses and recallAttempts outcomes, scores eligible concepts, and returns the top one. getOrCreateDailyRecallPrompt then calls ai.generateRecallQuestion({ conceptName, lastUnderstandingSummary: null, daysSinceReviewed }), inserts a new recallAttempts row with the returned question/expectedKeyPoints, re-selects and returns it as a PendingRecall for the dashboard to render.",
+        "app/page.tsx (home dashboard) calls getOrCreateDailyRecallPrompt() from lib/recall.ts. It queries recallAttempts for an unanswered row (none found) and for the most recent row overall (not from today), so it proceeds: pickHeuristicConcept() queries all concepts plus explainBackConcepts statuses and recallAttempts outcomes, scores eligible concepts, and returns the top one. getOrCreateDailyRecallPrompt then looks up that concept's most recent conceptUnderstandings.gist and calls ai.generateRecallQuestion({ conceptName, field: concept.field, lastUnderstandingSummary: <that gist, or null if none exists yet>, daysSinceReviewed }), inserts a new recallAttempts row with the returned question/expectedKeyPoints, re-selects and returns it as a PendingRecall for the dashboard to render.",
     },
     modify: {
       prompt:
@@ -52,7 +52,7 @@ export const recallRetention: CurriculumModule = {
       prompt:
         "Propose one concrete improvement to the recall/retention system, and justify the tradeoff.",
       groundTruth:
-        "Open-ended — evaluate for tradeoff-awareness. Reasonable directions: letting lastUnderstandingSummary (currently always passed as null to generateRecallQuestion) actually carry the most recent explain-back's summary so recall questions can be more targeted, allowing more than one recall question per day with a cap, or surfacing why a particular concept was chosen (recency vs. struggle bonus) in the UI for transparency.",
+        "Open-ended — evaluate for tradeoff-awareness. lastUnderstandingSummary now does carry the concept's most recent gist (this was a straightforward win once conceptUnderstandings.gist existed for the model to draw on, so it's no longer open work), so a good answer builds on that rather than re-proposing it. Reasonable directions from here: allowing more than one recall question per day with a cap, surfacing why a particular concept was chosen (recency vs. struggle bonus) in the UI for transparency, or weighting the struggle bonus by how long ago the struggle was, since today a single old misstep and a fresh one add the identical flat +14.",
     },
   },
 };
