@@ -75,8 +75,9 @@ export const DEFAULT_PALETTE: { day: Palette; night: Palette } = {
 };
 
 export function fitView(model: Viewable, w: number, h: number, ids?: Set<string>): View {
-  let { x0, y0, x1, y1 } = model.bounds;
   const focused = !!ids && ids.size > 0;
+  let x0: number, y0: number, x1: number, y1: number;
+
   if (focused) {
     const pts = model.points.filter((c) => ids!.has(c.id));
     if (pts.length > 0) {
@@ -84,31 +85,50 @@ export function fitView(model: Viewable, w: number, h: number, ids?: Set<string>
       y0 = Math.min(...pts.map((p) => p.y)) - 140;
       x1 = Math.max(...pts.map((p) => p.x)) + 180;
       y1 = Math.max(...pts.map((p) => p.y)) + 140;
+    } else {
+      ({ x0, y0, x1, y1 } = model.bounds);
     }
+  } else if (model.points.length > 0) {
+    // The whole-map view gravitates to where the learning actually is: a
+    // density-weighted crop around the real concept points, not the full
+    // geometric bounds. Sparse ambient decoration and a lone far-off
+    // sapling or star barely move it; a field with many concepts naturally
+    // has many points close together and pulls the frame toward it. When
+    // development is even across fields this reduces to showing them all.
+    const n = model.points.length;
+    const mx = model.points.reduce((s, p) => s + p.x, 0) / n;
+    const my = model.points.reduce((s, p) => s + p.y, 0) / n;
+    const sx = Math.sqrt(model.points.reduce((s, p) => s + (p.x - mx) ** 2, 0) / n);
+    const sy = Math.sqrt(model.points.reduce((s, p) => s + (p.y - my) ** 2, 0) / n);
+    const K = 2.6;
+    x0 = mx - Math.max(sx * K, 220); x1 = mx + Math.max(sx * K, 220);
+    y0 = my - Math.max(sy * K, 180); y1 = my + Math.max(sy * K, 180);
+  } else {
+    ({ x0, y0, x1, y1 } = model.bounds);
   }
+
   const pad = 36;
   const bw = Math.max(240, x1 - x0), bh = Math.max(200, y1 - y0);
-  let scale = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh, 2.2);
-  // Only for the whole-map view (never when fitting to a highlighted
-  // concept): don't zoom in tighter than showing most of the world's own
-  // width, so a sparse map still reads as a whole environment — ambient
-  // atmosphere and all — rather than a crop of one corner.
-  if (!focused) {
-    const minScale = (w - pad * 2) / (model.width * 0.68);
-    if (Number.isFinite(minScale)) scale = Math.max(scale, Math.min(minScale, 2.2));
-  }
+  const scale = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh, 2.2);
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  // clampView enforces full "cover" of the viewport regardless — it raises
+  // this scale and re-centers if the crop above would ever expose an edge.
   return clampView(model, { scale, tx: w / 2 - cx * scale, ty: h / 2 - cy * scale }, w, h);
 }
 
 /** Keep the world on screen: never panned entirely out of view, never absurdly scaled. */
 export function clampView(model: Viewable, view: View, w: number, h: number): View {
-  const scale = Math.min(6, Math.max(0.12, view.scale));
+  // "Cover" semantics: the world always fully fills the viewport, at any
+  // pan or zoom position, the way a cropped photo never shows its own
+  // edge. Zooming out is capped at exactly the point the world's width or
+  // height would stop covering the frame — panning is capped the same way.
+  const coverScale = Math.max(w / model.width, h / model.height);
+  const scale = Math.min(6, Math.max(view.scale, coverScale));
   const ratio = scale / view.scale;
   let tx = w / 2 - (w / 2 - view.tx) * ratio;
   let ty = h / 2 - (h / 2 - view.ty) * ratio;
-  tx = Math.min(w - 80, Math.max(80 - model.width * scale, tx));
-  ty = Math.min(h - 80, Math.max(80 - model.height * scale, ty));
+  tx = Math.min(0, Math.max(w - model.width * scale, tx));
+  ty = Math.min(0, Math.max(h - model.height * scale, ty));
   return { scale, tx, ty };
 }
 
