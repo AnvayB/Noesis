@@ -6,8 +6,9 @@ import { NavHeader } from "@/components/NavHeader";
 import { startFromQuestionAction } from "@/lib/actions/capture";
 import { resolveCuriosityItemAction } from "@/lib/actions/curiosity";
 import { setWeeklyFocusAction } from "@/lib/actions/focus";
-import { startSessionAction } from "@/lib/actions/sessions";
+import { dedupeSessionsAction, startSessionAction } from "@/lib/actions/sessions";
 import {
+  countDuplicates,
   getWeeklyFocus,
   listOpenCuriosityItems,
   listRecentSessions,
@@ -33,11 +34,12 @@ const KIND_WORD: Record<string, string> = {
 };
 
 export default async function LearnPage() {
-  const [inProgress, kept, questions, focus] = await Promise.all([
+  const [inProgress, kept, questions, focus, duplicateCount] = await Promise.all([
     listRecentSessions(20, { status: "started" }),
     listRecentSessions(50, { status: "pending" }),
     listOpenCuriosityItems(),
     getWeeklyFocus(),
+    countDuplicates(),
   ]);
 
   return (
@@ -59,6 +61,18 @@ export default async function LearnPage() {
             : a title, a source, how you took it in, and notes, for logging a session you already did
             or keeping one for later.
           </p>
+          {duplicateCount > 0 && (
+            <div className="row flex items-center justify-between gap-4">
+              <p className="meta">
+                {duplicateCount} duplicate{duplicateCount === 1 ? "" : "s"} found below.
+              </p>
+              <form action={dedupeSessionsAction}>
+                <button type="submit" className="btn btn-line btn-sm shrink-0">
+                  Clean up
+                </button>
+              </form>
+            </div>
+          )}
         </section>
 
         {inProgress.length > 0 && (
@@ -83,9 +97,12 @@ export default async function LearnPage() {
                       </span>
                     </div>
                   </div>
-                  <Link href={`/sessions/${session.id}#explain`} className="btn btn-ink btn-sm shrink-0">
-                    Continue
-                  </Link>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <DeleteSessionButton sessionId={session.id} sessionTitle={session.title} />
+                    <Link href={`/sessions/${session.id}#explain`} className="btn btn-ink btn-sm">
+                      Continue
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>

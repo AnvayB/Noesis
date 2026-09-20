@@ -79,7 +79,7 @@ export default async function NowPage() {
             seed={getMindscapeSeed()}
             fields={fields}
             highlightIds={highlight.slice(0, 8)}
-            heightClassName="h-[70vh] min-h-[480px] max-h-[820px]"
+            heightClassName="h-[70dvh] min-h-[480px] max-h-[820px]"
           />
         </section>
 

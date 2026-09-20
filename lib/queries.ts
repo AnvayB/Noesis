@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { weekStartOf } from "@/lib/capture";
+import { normalizeText, normalizeUrl, weekStartOf } from "@/lib/capture";
 import { deriveStanding, loadKnowledgeState, type KnowledgeState } from "@/lib/knowledge";
 import { getDb } from "./db";
 import {
@@ -94,6 +94,119 @@ export async function listOpenCuriosityItems() {
     .where(isNull(curiosityItems.resolvedAt))
     .orderBy(desc(curiosityItems.createdAt))
     .all();
+}
+
+// --- Duplicate detection -----------------------------------------------
+// A capture is a duplicate of an open (not-yet-completed) session when it
+// points at the same resource, or — for a plain question — reads as the
+// same text. Completed sessions are excluded: finishing something and
+// coming back to redo it deliberately isn't a duplicate.
+
+/** The open session already tracking this link, if any. */
+export async function findOpenSessionByUrl(url: string) {
+  const db = await getDb();
+  const key = normalizeUrl(url);
+  const rows = await db
+    .select({ id: learningSessions.id, status: learningSessions.status, url: resources.url })
+    .from(learningSessions)
+    .innerJoin(resources, eq(resources.id, learningSessions.resourceId))
+    .where(ne(learningSessions.status, "completed"))
+    .all();
+  return rows.find((r) => r.url && normalizeUrl(r.url) === key) ?? null;
+}
+
+/** The open session already tracking this exact question/title, if any. */
+export async function findOpenSessionByTitle(title: string) {
+  const db = await getDb();
+  const key = normalizeText(title);
+  const rows = await db
+    .select({ id: learningSessions.id, status: learningSessions.status, title: learningSessions.title })
+    .from(learningSessions)
+    .where(ne(learningSessions.status, "completed"))
+    .all();
+  return rows.find((r) => normalizeText(r.title) === key) ?? null;
+}
+
+/** The open curiosity item already holding this exact question, if any. */
+export async function findOpenCuriosityItemByText(text: string) {
+  const db = await getDb();
+  const key = normalizeText(text);
+  const rows = await db
+    .select({ id: curiosityItems.id, text: curiosityItems.text })
+    .from(curiosityItems)
+    .where(isNull(curiosityItems.resolvedAt))
+    .all();
+  return rows.find((r) => normalizeText(r.text) === key) ?? null;
+}
+
+export interface DuplicateSessionGroup {
+  key: string;
+  sessions: { id: string; title: string; status: LearningSessionStatus; startedAt: string }[];
+}
+
+/** Open sessions grouped by same-resource-or-same-title, for groups with
+ * more than one member — the sessions a cleanup would fold together. */
+export async function listDuplicateSessionGroups(): Promise<DuplicateSessionGroup[]> {
+  const db = await getDb();
+  const rows = await db
+    .select({
+      id: learningSessions.id,
+      title: learningSessions.title,
+      status: learningSessions.status,
+      startedAt: learningSessions.startedAt,
+      resourceUrl: resources.url,
+    })
+    .from(learningSessions)
+    .leftJoin(resources, eq(resources.id, learningSessions.resourceId))
+    .where(ne(learningSessions.status, "completed"))
+    .all();
+
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.resourceUrl ? `url:${normalizeUrl(row.resourceUrl)}` : `title:${normalizeText(row.title)}`;
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  return [...groups.entries()]
+    .filter(([, list]) => list.length > 1)
+    .map(([key, sessions]) => ({
+      key,
+      sessions: sessions.map(({ id, title, status, startedAt }) => ({ id, title, status, startedAt })),
+    }));
+}
+
+/** Open curiosity items grouped by same text, for groups with more than
+ * one member. */
+export async function listDuplicateCuriosityGroups() {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: curiosityItems.id, text: curiosityItems.text, createdAt: curiosityItems.createdAt })
+    .from(curiosityItems)
+    .where(isNull(curiosityItems.resolvedAt))
+    .all();
+
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = normalizeText(row.text);
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  return [...groups.entries()].filter(([, list]) => list.length > 1).map(([key, items]) => ({ key, items }));
+}
+
+/** Count of extra rows a cleanup would remove — sessions and questions. */
+export async function countDuplicates() {
+  const [sessionGroups, curiosityGroups] = await Promise.all([
+    listDuplicateSessionGroups(),
+    listDuplicateCuriosityGroups(),
+  ]);
+  const sessions = sessionGroups.reduce((n, g) => n + g.sessions.length - 1, 0);
+  const questions = curiosityGroups.reduce((n, g) => n + g.items.length - 1, 0);
+  return sessions + questions;
 }
 
 export async function getSessionById(id: string) {

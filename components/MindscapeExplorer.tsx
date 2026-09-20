@@ -26,7 +26,7 @@ export function MindscapeExplorer({
   seed,
   fields,
   highlightIds,
-  heightClassName = "h-[calc(100vh-9rem)] min-h-[520px]",
+  heightClassName = "h-[calc(100dvh-9rem)] min-h-[520px]",
   caption = true,
 }: {
   concepts: MapConcept[];

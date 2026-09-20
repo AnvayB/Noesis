@@ -16,7 +16,7 @@ export default async function MindscapePage() {
 
       <main className="page-enter flex flex-1 flex-col">
         {state.concepts.length === 0 ? (
-          <div className="mx-auto flex h-[calc(100vh-9rem)] min-h-[520px] w-full max-w-6xl flex-col items-center justify-center gap-3 px-6">
+          <div className="mx-auto flex h-[calc(100dvh-9rem)] min-h-[520px] w-full max-w-6xl flex-col items-center justify-center gap-3 px-6">
             <p className="meta">
               <Link href="/learn" className="link">
                 Start something
