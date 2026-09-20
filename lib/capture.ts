@@ -105,6 +105,36 @@ export async function fetchTitle(url: string): Promise<string | null> {
   }
 }
 
+const TRACKING_PARAMS = /^(utm_|fbclid$|gclid$|si$|feature$|igshid$)/i;
+
+/**
+ * A comparison key for "is this the same link", ignoring protocol, `www.`,
+ * a trailing slash, tracking params, and param order — so a re-pasted link
+ * that differs only in those ways still reads as a duplicate.
+ */
+export function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    const path = u.pathname.replace(/\/+$/, "");
+    const params = new URLSearchParams(u.search);
+    for (const key of [...params.keys()]) {
+      if (TRACKING_PARAMS.test(key)) params.delete(key);
+    }
+    params.sort();
+    const query = params.toString();
+    return `${host}${path}${query ? `?${query}` : ""}`.toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+/** A comparison key for "is this the same text", ignoring case and
+ * incidental whitespace differences. */
+export function normalizeText(text: string): string {
+  return text.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /** Monday of the week containing `date`, as YYYY-MM-DD. */
 export function weekStartOf(date = new Date()): string {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));

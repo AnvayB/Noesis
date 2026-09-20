@@ -18,7 +18,12 @@ import {
 } from "@/lib/db/schema";
 import { fetchArticle } from "@/lib/extract";
 import { listKnownFields } from "@/lib/knowledge";
-import { listRecentConceptNames } from "@/lib/queries";
+import {
+  findOpenCuriosityItemByText,
+  findOpenSessionByTitle,
+  findOpenSessionByUrl,
+  listRecentConceptNames,
+} from "@/lib/queries";
 
 function field(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
@@ -167,9 +172,38 @@ export async function createSession(opts: {
   return sessionId;
 }
 
+/** Moves an already-kept session into progress in place, instead of
+ * spawning a second row for the same thing. */
+async function markSessionStarted(sessionId: string) {
+  const db = await getDb();
+  await db
+    .update(learningSessions)
+    .set({ status: "started", startedAt: sql`(current_timestamp)` })
+    .where(eq(learningSessions.id, sessionId))
+    .run();
+  revalidatePath("/");
+  revalidatePath("/learn");
+}
+
+/** Turn a curiosity item into a session and begin it. */
+async function promoteCuriosityItemToSession(item: { id: string; text: string }): Promise<string> {
+  const { topic, field: fieldName } = await suggestConcept(item.text);
+  return createSession({
+    title: item.text,
+    topic,
+    field: fieldName,
+    status: "started",
+    resource: null,
+    curiosityItemId: item.id,
+  });
+}
+
 /**
  * One field, everywhere. A link becomes a thing to learn; anything else
- * becomes a question. `intent` is "start" or "keep".
+ * becomes a question. `intent` is "start" or "keep". A capture that reads
+ * as the same link or the same question as something already open (kept or
+ * in progress) folds into that existing session/question instead of
+ * spawning a duplicate.
  */
 export async function captureAction(formData: FormData) {
   const text = field(formData, "text");
@@ -180,15 +214,41 @@ export async function captureAction(formData: FormData) {
   const url = asUrl(text);
 
   if (!url) {
+    const dupeSession = await findOpenSessionByTitle(text);
+    if (dupeSession) {
+      if (intent === "start") {
+        if (dupeSession.status === "pending") await markSessionStarted(dupeSession.id);
+        redirect(`/sessions/${dupeSession.id}`);
+      }
+      redirect(returnTo);
+    }
+
+    const dupeQuestion = await findOpenCuriosityItemByText(text);
     if (intent === "start") {
-      const { topic, field: fieldName } = await suggestConcept(text);
-      const sessionId = await createSession({ title: text, topic, field: fieldName, status: "started", resource: null });
+      let sessionId: string;
+      if (dupeQuestion) {
+        sessionId = await promoteCuriosityItemToSession(dupeQuestion);
+      } else {
+        const { topic, field: fieldName } = await suggestConcept(text);
+        sessionId = await createSession({ title: text, topic, field: fieldName, status: "started", resource: null });
+      }
       redirect(`/sessions/${sessionId}`);
     }
-    const db = await getDb();
-    await db.insert(curiosityItems).values({ id: crypto.randomUUID(), text }).run();
-    revalidatePath("/");
-    revalidatePath("/learn");
+    if (!dupeQuestion) {
+      const db = await getDb();
+      await db.insert(curiosityItems).values({ id: crypto.randomUUID(), text }).run();
+      revalidatePath("/");
+      revalidatePath("/learn");
+    }
+    redirect(returnTo);
+  }
+
+  const dupeSession = await findOpenSessionByUrl(url);
+  if (dupeSession) {
+    if (intent === "start") {
+      if (dupeSession.status === "pending") await markSessionStarted(dupeSession.id);
+      redirect(`/sessions/${dupeSession.id}`);
+    }
     redirect(returnTo);
   }
 
@@ -214,14 +274,6 @@ export async function startFromQuestionAction(formData: FormData) {
   const item = await db.select().from(curiosityItems).where(eq(curiosityItems.id, id)).get();
   if (!item) return;
 
-  const { topic, field: fieldName } = await suggestConcept(item.text);
-  const sessionId = await createSession({
-    title: item.text,
-    topic,
-    field: fieldName,
-    status: "started",
-    resource: null,
-    curiosityItemId: item.id,
-  });
+  const sessionId = await promoteCuriosityItemToSession(item);
   redirect(`/sessions/${sessionId}`);
 }

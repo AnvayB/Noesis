@@ -23,6 +23,7 @@ import {
 import { findOrCreateConcept } from "@/lib/concepts";
 import { asUrl } from "@/lib/capture";
 import { createSession, describeLink, suggestConcept, type ResourceInput } from "@/lib/actions/capture";
+import { listDuplicateCuriosityGroups, listDuplicateSessionGroups } from "@/lib/queries";
 
 function field(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
@@ -257,10 +258,7 @@ export async function setAsideSessionAction(formData: FormData) {
 // in lib/db/index.ts turns it on — so a plain delete on learningSessions
 // would leave orphaned explain_backs/session_concepts rows behind. Delete
 // the dependent rows explicitly, in dependency order, instead.
-export async function deleteSessionAction(formData: FormData) {
-  const sessionId = field(formData, "sessionId");
-  if (!sessionId) throw new Error("Session id is required.");
-
+async function deleteSessionById(sessionId: string) {
   const db = await getDb();
 
   const backs = await db
@@ -294,6 +292,49 @@ export async function deleteSessionAction(formData: FormData) {
     .where(eq(curiosityItems.promotedToSessionId, sessionId))
     .run();
   await db.delete(learningSessions).where(eq(learningSessions.id, sessionId)).run();
+}
+
+export async function deleteSessionAction(formData: FormData) {
+  const sessionId = field(formData, "sessionId");
+  if (!sessionId) throw new Error("Session id is required.");
+
+  await deleteSessionById(sessionId);
+
+  revalidatePath("/");
+  revalidatePath("/learn");
+  revalidatePath("/sessions");
+}
+
+/**
+ * Folds every duplicate — sessions sharing a link or a question, questions
+ * sharing text — down to one. Within a group, a session already in
+ * progress is kept over one merely kept for later, and ties keep the
+ * earliest; the rest are deleted the same cascading way as a manual delete.
+ */
+export async function dedupeSessionsAction() {
+  const [sessionGroups, curiosityGroups] = await Promise.all([
+    listDuplicateSessionGroups(),
+    listDuplicateCuriosityGroups(),
+  ]);
+
+  for (const group of sessionGroups) {
+    const sorted = [...group.sessions].sort((a, b) => {
+      if (a.status !== b.status) return a.status === "started" ? -1 : 1;
+      return a.startedAt < b.startedAt ? -1 : 1;
+    });
+    for (const extra of sorted.slice(1)) {
+      await deleteSessionById(extra.id);
+    }
+  }
+
+  const db = await getDb();
+  for (const group of curiosityGroups) {
+    const sorted = [...group.items].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    const extraIds = sorted.slice(1).map((item) => item.id);
+    if (extraIds.length > 0) {
+      await db.delete(curiosityItems).where(inArray(curiosityItems.id, extraIds)).run();
+    }
+  }
 
   revalidatePath("/");
   revalidatePath("/learn");
