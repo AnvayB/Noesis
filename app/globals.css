@@ -75,6 +75,13 @@
 
 html {
   color-scheme: light;
+  /* The mobile nav drawer (MobileNavMenu) sits off-canvas via
+     translate-x-full when closed. Mobile browsers size the layout
+     viewport to fit a transformed fixed element's full painted box even
+     though it's visually offscreen, which was forcing every page wider
+     than the device and giving the whole site a phantom horizontal
+     scroll. Clipping at the root is the standard fix. */
+  overflow-x: hidden;
 }
 html.dark {
   color-scheme: dark;
@@ -88,6 +95,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   position: relative;
+  overflow-x: hidden;
 }
 
 /* The whole app sits on one survey sheet: a faint contour texture, fixed
@@ -394,5 +402,19 @@ a,
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* iOS Safari zooms the whole page in when a focused form control computes
+   under 16px, which every `.field` on the small end of its size range
+   (compact captures, the 13px filter select) does. Left unlayered so it
+   beats whatever text-size utility a field is also carrying — Tailwind's
+   utility layer otherwise outranks the `.field` rule in globals regardless
+   of source order. */
+@media (max-width: 640px) {
+  input.field,
+  select.field,
+  textarea.field {
+    font-size: 16px;
   }
 }
