@@ -288,7 +288,7 @@ export function drawGround(ctx: Ctx2D, model: GroundModel, pal: Palette, view: V
   for (const f of model.filaments) {
     const col = f.cross ? mix(pal.hues[f.hueA], pal.hues[f.hueB], 0.5) : pal.hues[f.hueA];
     ctx.strokeStyle = rgba(col, f.dotted ? 0.32 : 0.55);
-    ctx.lineWidth = (f.cross ? 1.4 : 1) / view.scale;
+    ctx.lineWidth = (0.5 + f.weight * 0.9) / view.scale;
     if (f.dotted) ctx.setLineDash([2.2, 3.4]); else ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(f.ax, f.ay);
@@ -533,7 +533,7 @@ export function drawGrove(
   for (const t of model.tendrils) {
     const col = t.cross ? mix(pal.hues[t.hueA], pal.hues[t.hueB], 0.5) : pal.hues[t.hueA];
     ctx.strokeStyle = rgba(col, 0.7);
-    ctx.lineWidth = (t.cross ? 1.5 : 1) / view.scale;
+    ctx.lineWidth = (0.6 + t.weight * 1) / view.scale;
     ctx.beginPath();
     ctx.moveTo(t.ax, t.ay);
     ctx.quadraticCurveTo(t.cx, t.cy, t.bx, t.by);
@@ -655,7 +655,7 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
   // Earned constellation lines.
   for (const l of model.lines) {
     ctx.strokeStyle = rgba(SKY_HUES[l.hue], l.strong ? 0.75 : 0.5);
-    ctx.lineWidth = (l.strong ? 1.3 : 0.9) / view.scale;
+    ctx.lineWidth = (0.6 + l.weight * 0.9) / view.scale;
     ctx.beginPath(); ctx.moveTo(l.ax, l.ay); ctx.lineTo(l.bx, l.by); ctx.stroke();
   }
   // Bridges: a light filament with a ring at each end.
@@ -664,7 +664,7 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
     grad2.addColorStop(0, rgba(SKY_HUES[br.hueA], 0.9));
     grad2.addColorStop(1, rgba(SKY_HUES[br.hueB], 0.9));
     ctx.strokeStyle = grad2;
-    ctx.lineWidth = 1.8 / view.scale;
+    ctx.lineWidth = (1.2 + br.weight * 0.9) / view.scale;
     ctx.beginPath(); ctx.moveTo(br.ax, br.ay); ctx.lineTo(br.bx, br.by); ctx.stroke();
     for (const [x, y, hue] of [[br.ax, br.ay, br.hueA], [br.bx, br.by, br.hueB]] as const) {
       ctx.strokeStyle = rgba(SKY_HUES[hue], 0.8);
