@@ -38,17 +38,40 @@ export interface ConceptSuggestion {
   field: string | null;
 }
 
+// A slow or hung model call must not be able to stall the capture/submit
+// flow that's waiting on it — the caller always gets an answer within
+// `ms`, one way or another, matching the timeout convention the fetch
+// calls in lib/capture.ts already use for the same reason.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 // The concept a piece of learning lands on, and the field it belongs to.
 // Asked of the model with the existing names so it reuses them; if the
-// model is unavailable the title itself becomes the concept, which is
-// honest and editable later.
+// model is unavailable or slow the title itself becomes the concept,
+// which is honest and editable later.
 export async function suggestConcept(title: string): Promise<ConceptSuggestion> {
   try {
     const [existingTopics, existingFields] = await Promise.all([
       listRecentConceptNames(null, 50),
       listKnownFields(),
     ]);
-    const { topic, field } = await ai.suggestTopic({ title, existingTopics, existingFields });
+    const { topic, field } = await withTimeout(
+      ai.suggestTopic({ title, existingTopics, existingFields }),
+      8000,
+    );
     if (topic?.trim()) return { topic: topic.trim(), field: field?.trim() || null };
   } catch {
     // fall through

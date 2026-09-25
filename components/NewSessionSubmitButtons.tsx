@@ -1,49 +1,38 @@
 "use client";
 
-import { useRef } from "react";
+import { useFormStatus } from "react-dom";
 
-// Prevents duplicate learning sessions from a double-click (or double-tap) on
-// either submit button: the first click disables both buttons synchronously
-// via a ref (not React state, which wouldn't re-render fast enough to catch
-// a second click that lands before the next paint), so a rapid second click
-// hits an already-disabled button and never fires a second form submission.
+// Disabling on `pending` (rather than an imperative ref set on click, as
+// this used to do) is what a double-click needs — React 19 already ignores
+// a second submission of the same form while the first is pending — and
+// it's also what a *failed* submission needs: `pending` drops back to
+// false whether the action redirects or throws, so a genuine error (a slow
+// model call, a network hiccup) leaves the form retryable instead of
+// stuck with both buttons dimmed forever and no way to tell why.
 //
 // Starting is the filled button. Keeping for later is the quiet one: the
 // product exists to displace bookmarking, so the hierarchy must not
 // recommend it.
 export function NewSessionSubmitButtons() {
-  const lockedRef = useRef(false);
-  const keepRef = useRef<HTMLButtonElement>(null);
-  const startRef = useRef<HTMLButtonElement>(null);
-
-  const lock = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (lockedRef.current) {
-      e.preventDefault();
-      return;
-    }
-    lockedRef.current = true;
-    if (keepRef.current) keepRef.current.disabled = true;
-    if (startRef.current) startRef.current.disabled = true;
-  };
+  const { pending } = useFormStatus();
 
   return (
     <>
       <button
-        ref={startRef}
         type="submit"
         name="status"
         value="started"
-        onClick={lock}
+        disabled={pending}
+        aria-busy={pending}
         className="btn btn-ink"
       >
-        Start now
+        {pending ? "One moment…" : "Start now"}
       </button>
       <button
-        ref={keepRef}
         type="submit"
         name="status"
         value="pending"
-        onClick={lock}
+        disabled={pending}
         className="btn btn-line"
       >
         Keep for later
