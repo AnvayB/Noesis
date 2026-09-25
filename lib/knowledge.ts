@@ -8,11 +8,14 @@ import {
   explainBackConcepts,
   explainBacks,
   recallAttempts,
+  sessionConcepts,
   type ConceptAddressedStatus,
   type ConceptRelationSource,
   type RecallOutcome,
+  type UnderstandingClarity,
   type UnderstandingDepth,
 } from "./db/schema";
+import { computeConceptWeight, computeRelationWeight, type ConceptWeightResult } from "./mindscape/weight";
 
 /**
  * The knowledge state: everything the Mindscape and the reflect moment need,
@@ -27,6 +30,10 @@ export interface ExplanationEvent {
   at: string; // ISO-ish "YYYY-MM-DD HH:MM:SS"
   status: ConceptAddressedStatus;
   depth: UnderstandingDepth;
+  clarity: UnderstandingClarity;
+  /** The five-step ladder (1 heard of it .. 5 could teach it), when the
+   * explain-back was analyzed after this field existed. */
+  level: number | null;
   sessionId: string;
 }
 
@@ -44,6 +51,19 @@ export interface KnowledgeConcept {
   standing: Standing;
   /** When the concept settled into ground, if it has. */
   retainedAt: string | null;
+  /** How developed this concept's understanding is, 0-1 — see
+   * lib/mindscape/weight.ts. Flattened onto the concept (rather than only
+   * nested under `weight`) because MapConcept expects it as a plain field —
+   * KnowledgeState flows into the Mindscape renderers by structural typing,
+   * with no separate adapter function. */
+  knowledgeWeight: number;
+  /** The revisit sub-score alone, 0-1 — see MapConcept. */
+  reinforcement: number;
+  /** Rare, meaningful high-development state — see MapConcept. */
+  exceptional: boolean;
+  /** The full dimensional breakdown behind knowledgeWeight, for anything
+   * that wants more than the composite (a future debug view, mainly). */
+  weight: ConceptWeightResult;
 }
 
 export interface KnowledgeRelation {
@@ -54,6 +74,8 @@ export interface KnowledgeRelation {
   strength: number;
   createdAt: string;
   description: string | null;
+  /** How much this relation contributes to connectedness/edge thickness. */
+  weight: number;
 }
 
 export interface KnowledgeState {
@@ -105,7 +127,7 @@ export function deriveStanding(
 /** Whole-map knowledge state in a handful of queries, not one per concept. */
 export async function loadKnowledgeState(): Promise<KnowledgeState> {
   const db = await getDb();
-  const [conceptRows, explanationRows, recallRows, relationRows, questionRows, understandingRows] =
+  const [conceptRows, explanationRows, recallRows, relationRows, questionRows, understandingRows, sessionRows] =
     await Promise.all([
       db.select().from(concepts).all(),
       db
@@ -113,6 +135,8 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
           conceptId: explainBackConcepts.conceptId,
           status: explainBackConcepts.status,
           depth: conceptUnderstandings.depth,
+          clarity: conceptUnderstandings.clarity,
+          level: conceptUnderstandings.level,
           at: explainBacks.createdAt,
           sessionId: explainBacks.sessionId,
         })
@@ -138,12 +162,13 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
         .select({ misconceptions: conceptUnderstandings.misconceptions })
         .from(conceptUnderstandings)
         .all(),
+      db.select({ conceptId: sessionConcepts.conceptId }).from(sessionConcepts).all(),
     ]);
 
   const explanationsBy = new Map<string, ExplanationEvent[]>();
   for (const row of explanationRows) {
     const list = explanationsBy.get(row.conceptId) ?? [];
-    list.push({ at: row.at, status: row.status, depth: row.depth, sessionId: row.sessionId });
+    list.push({ at: row.at, status: row.status, depth: row.depth, clarity: row.clarity, level: row.level, sessionId: row.sessionId });
     explanationsBy.set(row.conceptId, list);
   }
   const recallsBy = new Map<string, { at: string; outcome: RecallOutcome }[]>();
@@ -152,6 +177,10 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
     const list = recallsBy.get(row.conceptId) ?? [];
     list.push({ at: row.at, outcome: row.outcome });
     recallsBy.set(row.conceptId, list);
+  }
+  const sessionCountBy = new Map<string, number>();
+  for (const row of sessionRows) {
+    sessionCountBy.set(row.conceptId, (sessionCountBy.get(row.conceptId) ?? 0) + 1);
   }
 
   // Misconceptions are recorded against a concept by name.
@@ -166,6 +195,31 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
   // An open question belongs to a concept when it names it.
   const questionText = questionRows.map((q) => q.text.toLowerCase());
 
+  // Relation weights: computed once here (source + strength + cross-domain),
+  // reused both for each endpoint's connectedness/breadth and for the
+  // relation's own visual weight (edge thickness).
+  const fieldById = new Map(conceptRows.map((c) => [c.id, c.field]));
+  const relationWeightById = new Map<string, number>();
+  const neighborsByConceptId = new Map<string, Set<string>>();
+  const relationWeightsByConceptId = new Map<string, number[]>();
+  const touchNeighbor = (conceptId: string, neighborId: string, weight: number) => {
+    const neighbors = neighborsByConceptId.get(conceptId) ?? new Set<string>();
+    neighbors.add(neighborId);
+    neighborsByConceptId.set(conceptId, neighbors);
+    const weights = relationWeightsByConceptId.get(conceptId) ?? [];
+    weights.push(weight);
+    relationWeightsByConceptId.set(conceptId, weights);
+  };
+  for (const r of relationRows) {
+    const fromField = fieldById.get(r.fromConceptId);
+    const toField = fieldById.get(r.toConceptId);
+    const crossDomain = !!fromField && !!toField && fromField !== toField;
+    const weight = computeRelationWeight(r.source, r.strength, crossDomain);
+    relationWeightById.set(r.id, weight);
+    touchNeighbor(r.fromConceptId, r.toConceptId, weight);
+    touchNeighbor(r.toConceptId, r.fromConceptId, weight);
+  }
+
   const out: KnowledgeConcept[] = conceptRows.map((c) => {
     const explanations = (explanationsBy.get(c.id) ?? []).sort((a, b) => parseWhen(a.at) - parseWhen(b.at));
     const recalls = recallsBy.get(c.id) ?? [];
@@ -174,6 +228,14 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
     const touched = [c.lastEncounteredAt, c.lastReviewedAt, ...explanations.map((e) => e.at), ...recalls.map((r) => r.at)]
       .filter((x): x is string => !!x)
       .sort((a, b) => parseWhen(b) - parseWhen(a))[0];
+    const weight = computeConceptWeight({
+      explanations,
+      recalls,
+      neighborCount: neighborsByConceptId.get(c.id)?.size ?? 0,
+      relationWeights: relationWeightsByConceptId.get(c.id) ?? [],
+      sessionCount: sessionCountBy.get(c.id) ?? 0,
+      retained: standing === "Retained",
+    });
     return {
       id: c.id,
       name: c.name,
@@ -187,6 +249,10 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
       openQuestion: nameLower.length > 3 && questionText.some((q) => q.includes(nameLower)),
       standing,
       retainedAt,
+      knowledgeWeight: weight.weight,
+      reinforcement: weight.reinforcement,
+      exceptional: weight.exceptional,
+      weight,
     };
   });
 
@@ -200,6 +266,7 @@ export async function loadKnowledgeState(): Promise<KnowledgeState> {
       strength: r.strength,
       createdAt: r.createdAt,
       description: r.description,
+      weight: relationWeightById.get(r.id) ?? 0,
     })),
   };
 }

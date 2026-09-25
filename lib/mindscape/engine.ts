@@ -29,6 +29,15 @@ export interface MapConcept {
   retainedAt: string | null;
   misconceptions: number;
   openQuestion: boolean;
+  /** How developed this concept's understanding is, 0-1 — see lib/mindscape/weight.ts.
+   * Drives size (colony extent / canopy / star magnitude) across all three climates. */
+  knowledgeWeight: number;
+  /** The revisit sub-score alone, 0-1 — drives the separate "how often you
+   * came back" channel (organelle/leaf count, halo), kept apart from
+   * knowledgeWeight so the two visual channels stay independent. */
+  reinforcement: number;
+  /** Rare, meaningful high-development state — same threshold everywhere. */
+  exceptional: boolean;
 }
 
 export interface MapRelation {
@@ -37,6 +46,8 @@ export interface MapRelation {
   source: ConceptRelationSource;
   strength: number;
   createdAt: string;
+  /** How much this relation should visually weigh — see computeRelationWeight. */
+  weight: number;
 }
 
 export interface MapInput {
@@ -124,9 +135,6 @@ export function parseWhen(iso: string): number {
 export const DAY = 86400000;
 export const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 const HUE_COUNT = 6;
-
-export const DEPTH_WEIGHT: Record<UnderstandingDepth, number> = { surface: 0.32, solid: 0.6, deep: 0.92 };
-export const STATUS_WEIGHT: Record<ConceptAddressedStatus, number> = { correct: 1, partial: 0.55, missing: 0.22 };
 
 // --- Layout -----------------------------------------------------------------
 

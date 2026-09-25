@@ -10,8 +10,6 @@
 
 import {
   DAY,
-  DEPTH_WEIGHT,
-  STATUS_WEIGHT,
   hash32,
   mulberry32,
   parseWhen,
@@ -49,6 +47,8 @@ export interface SkyLine {
   by: number;
   hue: number;
   strong: boolean;
+  /** computeRelationWeight output — drives line thickness. */
+  weight: number;
 }
 
 export interface SkyBridge {
@@ -58,6 +58,8 @@ export interface SkyBridge {
   by: number;
   hueA: number;
   hueB: number;
+  /** computeRelationWeight output — drives bridge thickness. */
+  weight: number;
 }
 
 /** Faraway, unclickable dust — the rest of the sky, not any concept. Three
@@ -120,9 +122,7 @@ export function buildSky(input: MapInput): SkyModel {
   const { W, H, fields, work } = placeMindscape(input);
 
   const stars: SkyStar[] = work.map((w) => {
-    let sum = 0;
-    for (const e of w.input.explanations) sum += DEPTH_WEIGHT[e.depth] * STATUS_WEIGHT[e.status];
-    const extent = Math.min(1, sum / 2.2);
+    const extent = w.input.knowledgeWeight;
     const explained = w.input.explanations.length > 0;
     const lastCorrect = [...w.input.explanations].reverse().find((e) => e.status === "correct");
     const weak = w.input.misconceptions > 0 && (!lastCorrect || parseWhen(lastCorrect.at) < now - 21 * DAY);
@@ -130,12 +130,12 @@ export function buildSky(input: MapInput): SkyModel {
       id: w.input.id, name: w.input.name, slug: w.input.slug, fieldIndex: w.fieldIndex, hue: w.hue,
       x: w.x, y: w.y,
       magnitude: explained ? 3 + extent * 9 : 1.6,
-      halo: Math.min(1, w.input.explanations.length / 4),
+      halo: w.input.reinforcement,
       spikes: w.input.standing === "Retained",
       nebula: w.input.standing === "Retained" ? Math.min(1, (now - parseWhen(w.input.retainedAt ?? w.input.firstEncounteredAt)) / (60 * DAY)) : 0,
       weak, live: now - parseWhen(w.input.lastTouchedAt) <= 14 * DAY,
       standing: w.input.standing, explained,
-      exceptional: w.input.standing === "Retained" && w.input.explanations.length >= 3 && extent > 0.85,
+      exceptional: w.input.exceptional,
     };
   });
   const byId = new Map(stars.map((s) => [s.id, s]));
@@ -153,9 +153,13 @@ export function buildSky(input: MapInput): SkyModel {
     if (!a.explained || !b.explained) continue;
     const cross = a.fieldIndex !== b.fieldIndex;
     if (cross && r.source === "explained") {
-      bridges.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, hueA: a.hue, hueB: b.hue });
+      bridges.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, hueA: a.hue, hueB: b.hue, weight: r.weight });
     } else if (!cross) {
-      lines.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, hue: a.hue, strong: a.standing === "Retained" && b.standing === "Retained" });
+      lines.push({
+        ax: a.x, ay: a.y, bx: b.x, by: b.y, hue: a.hue,
+        strong: a.standing === "Retained" && b.standing === "Retained",
+        weight: r.weight,
+      });
     }
   }
 

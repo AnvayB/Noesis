@@ -17,9 +17,7 @@
 
 import {
   DAY,
-  DEPTH_WEIGHT,
   GOLDEN,
-  STATUS_WEIGHT,
   hash32,
   makeNoise,
   mulberry32,
@@ -31,6 +29,7 @@ import {
   type PlacedField,
   type Working,
 } from "./engine";
+import { aggregateDomainWeight } from "./weight";
 import type { Standing } from "@/lib/knowledge";
 
 export interface GroveLeaf {
@@ -73,6 +72,8 @@ export interface GroveTendril {
   cross: boolean;
   fx: number;
   fy: number;
+  /** computeRelationWeight output — drives tendril thickness. */
+  weight: number;
 }
 
 export interface GroveRoot {
@@ -157,12 +158,6 @@ export interface GroveModel {
   bounds: { x0: number; y0: number; x1: number; y1: number };
 }
 
-function extentOf(w: Working): number {
-  let sum = 0;
-  for (const e of w.input.explanations) sum += DEPTH_WEIGHT[e.depth] * STATUS_WEIGHT[e.status];
-  return Math.min(1, sum / 2.2);
-}
-
 export function buildGrove(input: MapInput): GroveModel {
   const now = input.now ?? Date.now();
   // placeMindscape gives us per-concept identity (rng, hue, field, angle) —
@@ -202,13 +197,18 @@ export function buildGrove(input: MapInput): GroveModel {
     const members = byField.get(fi)!;
     const f = fields[fi];
     const ordered = [...members].sort((a, b) => a.born - b.born || a.input.id.localeCompare(b.input.id));
-    const totalExtent = ordered.reduce((s, w) => s + extentOf(w) * (w.input.explanations.length > 0 ? 1 : 0), 0);
-    const sapling = totalExtent < 0.6 && ordered.length <= 2;
+    const totalExtent = aggregateDomainWeight(
+      ordered.filter((w) => w.input.explanations.length > 0).map((w) => w.input.knowledgeWeight),
+    );
+    const sapling = totalExtent < 0.15 && ordered.length <= 2;
     const x = trunkX.get(fi)!;
     const baseY = groundY;
-    const canopy = Math.max(70, Math.min(340, 50 + totalExtent * 80 + ordered.length * 12));
-    const topY = baseY - (sapling ? 50 + totalExtent * 70 : canopy + 40);
-    const trunkWidth = sapling ? 1.6 : Math.min(9, 2.4 + totalExtent * 1.6);
+    // totalExtent is now the saturating domain rollup (see aggregateDomainWeight)
+    // rather than an unbounded per-member sum, so it's scaled up here to
+    // still fill the same canopy/trunk/topY ranges as before.
+    const canopy = Math.max(70, Math.min(340, 50 + totalExtent * 260 + ordered.length * 12));
+    const topY = baseY - (sapling ? 50 + totalExtent * 220 : canopy + 40);
+    const trunkWidth = sapling ? 1.6 : Math.min(9, 2.4 + totalExtent * 11);
     trunks.push({ x, baseY, topY, hue: f.hue, name: f.name, sapling, width: trunkWidth });
 
     // Branches attach evenly from just above the ground to just under the
@@ -218,10 +218,10 @@ export function buildGrove(input: MapInput): GroveModel {
       const attachFrac = ordered.length > 1 ? i / (ordered.length - 1) : 0.4;
       const attachY = attachBottom - attachFrac * (attachBottom - attachTop);
       const side = i % 2 === 0 ? 1 : -1;
-      const extent = extentOf(w);
+      const extent = w.input.knowledgeWeight;
       const explained = w.input.explanations.length > 0;
       const length = sapling ? 22 + extent * 34 : explained ? 46 + extent * 150 : 16;
-      const thickness = explained ? Math.min(1 + w.input.explanations.length * 0.9, 5.5) : 0.9;
+      const thickness = explained ? Math.min(1 + w.input.reinforcement * 7, 5.5) : 0.9;
       // An angle from vertical, wider toward the crown so the silhouette
       // reads as a tree rather than a row of spikes.
       const angle = side * (0.28 + (1 - attachFrac) * 0.35 + w.rng() * 0.22);
@@ -239,7 +239,7 @@ export function buildGrove(input: MapInput): GroveModel {
       // — a full, layered canopy rather than a scatter of dots.
       const leaves: GroveLeaf[] = [];
       if (explained && !weak) {
-        const n = Math.round(6 + extent * 14 + Math.min(6, w.input.explanations.length - 1) * 2);
+        const n = Math.round(6 + extent * 14 + w.input.reinforcement * 12);
         for (let k = 0; k < n; k++) {
           const t = 0.22 + (k / Math.max(1, n - 1)) * 0.8;
           const along = { x: x0 + dx * t + Math.sin(t * 3) * bend * 0.4, y: y0 + dy * t };
@@ -308,7 +308,7 @@ export function buildGrove(input: MapInput): GroveModel {
     const lift = Math.min(80, Math.hypot(bb.x1 - ba.x1, bb.y1 - ba.y1) * 0.3);
     tendrils.push({
       ax: ba.x1, ay: ba.y1, bx: bb.x1, by: bb.y1, cx: mx, cy: my - lift,
-      hueA: ba.hue, hueB: bb.hue, cross, fx: mx, fy: my - lift,
+      hueA: ba.hue, hueB: bb.hue, cross, fx: mx, fy: my - lift, weight: r.weight,
     });
     ba.leaves.push({ x: ba.x1, y: ba.y1, r: 5, flower: true });
     bb.leaves.push({ x: bb.x1, y: bb.y1, r: 5, flower: true });

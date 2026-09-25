@@ -16,8 +16,6 @@
 
 import {
   DAY,
-  DEPTH_WEIGHT,
-  STATUS_WEIGHT,
   hash32,
   mulberry32,
   parseWhen,
@@ -25,8 +23,8 @@ import {
   type MapInput,
   type MapPoint,
   type PlacedField,
-  type Working,
 } from "./engine";
+import { aggregateDomainWeight, saturate } from "./weight";
 import type { Standing } from "@/lib/knowledge";
 
 export interface GroundColony {
@@ -70,6 +68,8 @@ export interface GroundFilament {
   hueB: number;
   cross: boolean;
   dotted: boolean;
+  /** computeRelationWeight output — drives filament thickness. */
+  weight: number;
 }
 
 /** Purely decorative — the rest of the dish, never a concept. Three tiers
@@ -122,19 +122,13 @@ export interface GroundModel {
   bounds: { x0: number; y0: number; x1: number; y1: number };
 }
 
-function extentOf(w: Working): number {
-  let sum = 0;
-  for (const e of w.input.explanations) sum += DEPTH_WEIGHT[e.depth] * STATUS_WEIGHT[e.status];
-  return Math.min(1, sum / 2.2);
-}
-
 export function buildGroundEcosystem(input: MapInput): GroundModel {
   const now = input.now ?? Date.now();
   const { W, H, fields, work } = placeMindscape(input);
   const byId = new Map(work.map((w) => [w.input.id, w]));
 
   const cells: GroundCell[] = work.map((w) => {
-    const extent = extentOf(w);
+    const extent = w.input.knowledgeWeight;
     const explained = w.input.explanations.length > 0;
     const lastCorrect = [...w.input.explanations].reverse().find((e) => e.status === "correct");
     const weak = w.input.misconceptions > 0 && (!lastCorrect || parseWhen(lastCorrect.at) < now - 21 * DAY);
@@ -143,7 +137,7 @@ export function buildGroundEcosystem(input: MapInput): GroundModel {
       x: w.x, y: w.y,
       r: explained ? 6 + extent * 15 : 3,
       rod: hash32("rod:" + w.input.id) % 5 === 0,
-      organelles: Math.min(5, w.input.explanations.length),
+      organelles: Math.round(w.input.reinforcement * 5),
       standing: w.input.standing,
       mature: w.input.standing === "Retained",
       misconception: weak,
@@ -170,15 +164,20 @@ export function buildGroundEcosystem(input: MapInput): GroundModel {
     const bend = (mulberry32(hash32("bend:" + key))() - 0.5) * 40;
     filaments.push({
       ax: ca.x, ay: ca.y, bx: cb.x, by: cb.y, cx: mx + bend, cy: my - bend,
-      hueA: ca.hue, hueB: cb.hue, cross, dotted: r.source === "llm_inferred",
+      hueA: ca.hue, hueB: cb.hue, cross, dotted: r.source === "llm_inferred", weight: r.weight,
     });
   }
 
-  // Colonies: a soft membrane sized by how much has grown in the field.
+  // Colonies: a soft membrane sized by how developed the field is overall,
+  // with diminishing returns so many trivial cells can't outgrow a few
+  // deeply developed ones.
   const colonies: GroundColony[] = fields.map((f) => {
-    const members = cells.filter((c) => c.fieldIndex === fields.indexOf(f));
-    const mass = members.reduce((s, c) => s + c.r, 0);
-    const radius = Math.max(46, Math.min(190, 40 + mass * 0.9));
+    const members = work.filter((w) => w.fieldIndex === fields.indexOf(f));
+    const domainWeight = aggregateDomainWeight(members.map((w) => w.input.knowledgeWeight));
+    // A colony with more cells reads as fuller even before they've grown —
+    // but only up to a small, saturating bump, so member count alone can
+    // never be what makes a colony large.
+    const radius = Math.max(46, Math.min(190, 46 + domainWeight * 144 + saturate(members.length, 6) * 20));
     return { name: f.name, x: f.x, y: f.y, hue: f.hue, radius, labelX: f.labelX, labelY: f.labelY };
   });
 
