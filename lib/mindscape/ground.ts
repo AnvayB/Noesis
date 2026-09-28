@@ -122,9 +122,18 @@ export interface GroundModel {
   bounds: { x0: number; y0: number; x1: number; y1: number };
 }
 
+const GROUND_ASPECT = 1.8;
+
 export function buildGroundEcosystem(input: MapInput): GroundModel {
   const now = input.now ?? Date.now();
-  const { W, H, fields, work } = placeMindscape(input);
+  const placed = placeMindscape(input);
+  const { H, fields, work } = placed;
+  // The shared layout is square; the dish is a wide hero like Grove and
+  // Nebula, so spread it horizontally to fill a full-width viewport.
+  const W = placed.W * GROUND_ASPECT;
+  const wide = (x: number) => W / 2 + (x - placed.W / 2) * GROUND_ASPECT;
+  for (const f of fields) { f.x = wide(f.x); f.labelX = wide(f.labelX); }
+  for (const w of work) w.x = wide(w.x);
   const byId = new Map(work.map((w) => [w.input.id, w]));
 
   const cells: GroundCell[] = work.map((w) => {

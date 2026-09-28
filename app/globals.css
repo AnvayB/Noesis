@@ -302,6 +302,10 @@ a,
     outline: none;
     border-bottom-color: var(--lamp);
   }
+  select.field option {
+    background-color: var(--sheet);
+    color: var(--ink);
+  }
   select.field {
     appearance: auto;
     padding-right: 8px;
