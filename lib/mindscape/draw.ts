@@ -231,12 +231,12 @@ function drawDustShape(ctx: Ctx2D, kind: string, x: number, y: number, r: number
   ctx.restore();
 }
 
-export function drawGround(ctx: Ctx2D, model: GroundModel, pal: Palette, view: View, w: number, h: number, skip: Set<string>) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+export function drawGround(ctx: Ctx2D, model: GroundModel, pal: Palette, view: View, w: number, h: number, skip: Set<string>, dpr = 1) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = rgba(pal.paper, 1);
   ctx.fillRect(0, 0, w, h);
-  ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
+  ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.tx * dpr, view.ty * dpr);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
 
   // Ambient membranes: the furthest layer, soft unlabeled bubbles that give
@@ -387,8 +387,9 @@ export function drawGrove(
   h: number,
   skip: Set<string>,
   washImg?: GroundImage,
+  dpr = 1,
 ) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   // A soft sky wash, always present, so the grove has atmosphere above the
   // ground line even before a single tree has grown.
@@ -398,7 +399,7 @@ export function drawGrove(
   skyGrad.addColorStop(1, rgba(pal.paper, 1));
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, w, h);
-  ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
+  ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.tx * dpr, view.ty * dpr);
 
   // Horizon: a faint distant tree line, always present, well behind
   // everything real.
@@ -565,8 +566,8 @@ const SKY_HUES: RGB[] = [
   [248, 148, 84],
 ];
 
-export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w: number, h: number, skip: Set<string>) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w: number, h: number, skip: Set<string>, dpr = 1) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   // A deep midnight at the top, blending down into the page's own paper
   // before the bottom edge — never an abrupt cut.
@@ -577,7 +578,7 @@ export function drawSky(ctx: Ctx2D, model: SkyModel, pal: Palette, view: View, w
   grad.addColorStop(1, rgba(pal.paper, 1));
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
-  ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
+  ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.tx * dpr, view.ty * dpr);
 
   // Distant galaxies: a soft spiral smear, well away from the content.
   for (const g of model.galaxies) {

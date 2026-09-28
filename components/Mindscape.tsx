@@ -126,12 +126,20 @@ function MindscapeLayer({
   const model = groundModel ?? groveModel ?? skyModel!;
   const points: MapPoint[] = model.points;
 
-  // Size to the container; redraw on resize.
+  // Size to the container; redraw on resize. Read the layout box from the
+  // observer entry itself, not a fresh getBoundingClientRect() — the wrap
+  // sits inside the climate-switch motion.div, which applies a CSS
+  // transform (scale) during the crossfade, and getBoundingClientRect
+  // reports that transformed, purely-visual size. If the observer fires
+  // mid-transition (routine on mount, since a fresh layer's first layout is
+  // itself a resize), a scale like 1.12 gets baked into the canvas size
+  // permanently, since a transform alone never fires another resize to
+  // correct it. contentRect is the untransformed layout box.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0].contentRect;
       setSize({ w: Math.round(r.width), h: Math.round(r.height) });
     });
     ro.observe(el);
@@ -171,21 +179,25 @@ function MindscapeLayer({
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = size.w * dpr; canvas.height = size.h * dpr;
     const ctx = canvas.getContext("2d")!;
-    ctx.scale(dpr, dpr);
     const pal = readPalette(wrap);
     const scaled = { scale: view.scale, tx: view.tx, ty: view.ty };
     const skipSet = reveal ? highlightSet : new Set<string>();
 
+    // dpr goes through to the draw calls, not ctx.scale(dpr, dpr) here:
+    // each draw function's own setTransform (needed to reset the world
+    // transform before repainting the background) replaces rather than
+    // composes with whatever the context's matrix already is, so a scale
+    // applied out here would just be discarded.
     if (groundModel) {
-      drawGround(ctx, groundModel, pal, scaled, size.w, size.h, skipSet);
+      drawGround(ctx, groundModel, pal, scaled, size.w, size.h, skipSet, dpr);
     } else if (groveModel) {
       const key = `${pal.night}|${groveModel.branches.length}|${seed}`;
       if (!groveWashRef.current || groveWashRef.current.key !== key) {
         groveWashRef.current = { key, img: paintGroveWash(groveModel, pal) };
       }
-      drawGrove(ctx, groveModel, pal, scaled, size.w, size.h, skipSet, groveWashRef.current.img);
+      drawGrove(ctx, groveModel, pal, scaled, size.w, size.h, skipSet, groveWashRef.current.img, dpr);
     } else if (skyModel) {
-      drawSky(ctx, skyModel, pal, scaled, size.w, size.h, skipSet);
+      drawSky(ctx, skyModel, pal, scaled, size.w, size.h, skipSet, dpr);
     }
   }, [groundModel, groveModel, skyModel, size, view, themeTick, reveal, highlightSet, labels, seed]);
 
@@ -223,9 +235,9 @@ function MindscapeLayer({
         revealDone = f >= 1;
         ctx.save();
         ctx.globalAlpha = 1 - Math.pow(1 - f, 3);
-        if (groundModel) drawGround(ctx, groundModel, pal, view, size.w, size.h, new Set());
-        else if (groveModel) drawGrove(ctx, groveModel, pal, view, size.w, size.h, new Set());
-        else if (skyModel) drawSky(ctx, skyModel, pal, view, size.w, size.h, new Set());
+        if (groundModel) drawGround(ctx, groundModel, pal, view, size.w, size.h, new Set(), dpr);
+        else if (groveModel) drawGrove(ctx, groveModel, pal, view, size.w, size.h, new Set(), undefined, dpr);
+        else if (skyModel) drawSky(ctx, skyModel, pal, view, size.w, size.h, new Set(), dpr);
         ctx.restore();
       }
 
